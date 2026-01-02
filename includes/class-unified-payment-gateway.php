@@ -67,6 +67,8 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 
 		add_action('admin_enqueue_scripts', [$this, 'unified_admin_scripts']);
 
+		add_action('wp_footer', [$this, 'render_unified_payment_popup']);
+
 		// Add action to display test order tag in order details
 		add_action('woocommerce_admin_order_data_after_order_details', [$this, 'unified_display_test_order_tag']);
 
@@ -1154,6 +1156,13 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		if (is_checkout()) {
 			// Enqueue stylesheets
 			wp_enqueue_style(
+				'unified-frontend-styles',
+				plugins_url('../assets/css/frontend.css', __FILE__),
+				[], // Dependencies (if any)
+				'1.0', // Version number
+				'all' // Media
+			);
+			wp_enqueue_style(
 				'unified-payment-loader-styles',
 				plugins_url('../assets/css/loader.css', __FILE__),
 				[], // Dependencies (if any)
@@ -2013,5 +2022,447 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		}
 
 		return true;
+	}
+
+	public function render_unified_payment_popup()
+	{
+		if (!is_checkout()) {
+			return;
+		}
+		?>
+		<div class="overlay" id="unified-payment-popup" style="display: none;">
+			<div class="modal">
+
+				<!-- Header -->
+				<div class="modal-header">
+					<button class="back-btn"><i class="fa fa-arrow-left" aria-hidden="true"></i></button>
+					<div class="logo"><img src="<?php echo esc_url(plugins_url('../assets/images/logo.png', __FILE__)); ?>" width="71.5" height="26" /></div>
+					<button class="close-btn">&times;</button>
+				</div>
+
+				<!-- Content -->
+				<div class="modal-body">
+
+					<div class="processing-overlay">
+						<div class="processing-card">
+
+							<div class="logo-wrap">
+								<div class="logo"><img src="<?php echo esc_url(plugins_url('../assets/images/logo.png', __FILE__)); ?>" width="100" height="39" /></div>
+							</div>
+							<div class="loading-messages">
+								<p class="loading-text" id="loadingText">
+									Finding the best payment route for you...
+								</p>
+							</div>
+
+							<div class="progress-bar">
+								<span class="progress-fill"></span>
+							</div>
+
+							<div class="methods">
+								<p>Supported payment methods:</p>
+								<div class="icons">
+									<span><img src="<?php echo esc_url(plugins_url('../assets/images/pay1.png', __FILE__)); ?>" width="22" height="22" /></span>
+									<span><img src="<?php echo esc_url(plugins_url('../assets/images/pay2.png', __FILE__)); ?>" width="22" height="22" /></span>
+									<span><img src="<?php echo esc_url(plugins_url('../assets/images/pay3.png', __FILE__)); ?>" width="22" height="22" /></span>
+									<span><img src="<?php echo esc_url(plugins_url('../assets/images/pay4.png', __FILE__)); ?>" width="22" height="22" /></span>
+								</div>
+							</div>
+
+						</div>
+					</div>
+
+					<div class="stepper">
+						<div class="line"></div>
+
+						<div class="step active">
+							<span class="dot"></span>
+							<span class="text">Details</span>
+						</div>
+
+
+						<div class="step">
+							<span class="dot"></span>
+							<span class="text">Payment Method</span>
+						</div>
+
+
+						<div class="step">
+							<span class="dot"></span>
+							<span class="text">Pay</span>
+						</div>
+
+						<div class="line"></div>
+
+					</div>
+
+					<div class="main-content" style="display:none">
+
+						<!-- Personal Details -->
+						<div class="summary">
+							<div class="card-header toggle-summary pl-10">
+								<div class="card-title">
+									<img src="<?php echo esc_url(plugins_url('../assets/images/User_icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Personal
+										Details</span>
+								</div>
+								<!-- <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span> -->
+								<span class="edit-icon personal-info"><i class="fa fa-pencil-square-o" aria-hidden="true">Edit</i></span>
+							</div>
+							<div class="card">
+								<div class="summary-body grid">
+									<div>
+										<label>First Name</label>
+										<p>Jenny</p>
+									</div>
+									<div>
+										<label>Last Name</label>
+										<p>Williamson</p>
+									</div>
+									<div>
+										<label>Email</label>
+										<p>jennyw@example.com</p>
+									</div>
+									<div>
+										<label>Phone Number</label>
+										<p>(415) 555-2671</p>
+									</div>
+								</div>
+
+								<div class="middle-content edit-personal-info">
+									<div class="form-grid">
+										<div class="form-group">
+											<label>First Name</label>
+											<input type="text" value="Jenny" placeholder="Enter First Name">
+										</div>
+
+										<div class="form-group">
+											<label>Last Name</label>
+											<input type="text" value="Williamson" placeholder="Enter Last Name">
+										</div>
+									</div>
+
+									<div class="form-group">
+										<label>Email</label>
+										<input type="email" value="jennyw@example.com" placeholder="Enter Email">
+									</div>
+
+									<div class="form-group">
+										<label>Phone Number</label>
+										<div class="phone-input">
+											<div class="country-code">
+												🇺🇸
+												<i class="fa fa-angle-down"></i>
+											</div>
+											<input type="text" value="(415) 555-2671" placeholder="Enter Phone Number">
+										</div>
+									</div>
+
+									<button class="save-btn">Save</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Date of Birth -->
+						<div class="card summary">
+							<div class="card-header toggle-summary">
+								<div class="card-title">
+									<img src="<?php echo esc_url(plugins_url('../assets/images/calendar_icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Date of Birth
+										<span>(Required)</span></span>
+								</div>
+							</div>
+							<div class="summary-body">
+								<p class="date-text">Used for age verification & compliance</p>
+								<div class="form-group">
+									<input type="date" placeholder="MM/DD/YYYY">
+								</div>
+							</div>
+
+						</div>
+
+						<!-- Billing Address -->
+						<div class="summary">
+							<div class="card-header toggle-summary pl-10">
+								<div class="card-title">
+									<img src="<?php echo esc_url(plugins_url('../assets/images/bill_Icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Billing
+										Address</span>
+								</div>
+								<!-- <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span> -->
+								<span class="edit-icon billing-address"><i class="fa fa-pencil-square-o"
+										aria-hidden="true"></i></span>
+							</div>
+
+							<div class="card">
+
+								<div class="summary-body address">
+									<p class="address"> 4517 Washington Ave. Manchester, Kentucky 39495. </p>
+								</div>
+
+								<div class="middle-content edit-billing-address">
+									<div class="form-group">
+										<label>Address</label>
+										<input type="text" value="jennyw@example.com" placeholder="Enter Address">
+									</div>
+									<div class="form-group">
+										<label>Address</label>
+										<input type="text" value="jennyw@example.com" placeholder="Enter Address">
+									</div>
+									<div class="form-grid">
+										<div class="form-group">
+											<label>Country</label>
+											<select>
+												<option>Country</option>
+											</select>
+										</div>
+
+										<div class="form-group">
+											<label>City</label>
+											<input type="text" value="Williamson" placeholder="Enter City">
+										</div>
+									</div>
+									<div class="form-grid">
+										<div class="form-group">
+											<label>State</label>
+											<input type="text" value="Jenny" placeholder="Enter State">
+										</div>
+
+										<div class="form-group">
+											<label>Pin code</label>
+											<input type="text" value="Williamson" placeholder="Enter Pin code">
+										</div>
+									</div>
+									<button class="save-btn">Save</button>
+
+								</div>
+							</div>
+						</div>
+
+						<!-- Payment Summary -->
+						<div class="card-header">
+							<div class="card-title summary-title pl-10">
+								<img src="<?php echo esc_url(plugins_url('../assets/images/payment_Icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Payment
+									Summary</span>
+							</div>
+
+							<!-- Arrow (default) -->
+							<!-- <span class="arrows"><i class="fa fa-angle-down" aria-hidden="true"></i></span> -->
+
+
+						</div>
+
+						<div class="card">
+
+							<div class="summary-body">
+								<div class="summary-row">
+									<span>Amount</span>
+									<span>$100.00</span>
+								</div>
+
+								<div class="summary-row">
+									<span>Fees</span>
+									<span>$3.46</span>
+								</div>
+
+								<div class="summary-divider"></div>
+
+								<div class="summary-row total">
+									<span>Total Payment</span>
+									<span><b>$103.46</b></span>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="payment-method-content">
+						<div class="payment-wrapper payment-method">
+							<div class="title">
+								<div class="icon"><img src="<?php echo esc_url(plugins_url('../assets/images/secure-payment.png', __FILE__)); ?>" width="45" height="45" />
+								</div>
+								<h2>Select a payment method</h2>
+								<p>Securely continue with your preferred option.</p>
+							</div>
+
+							<div class="payment-list">
+
+								<label class="payment-option" id="credit-card">
+									<input type="radio" name="payment" checked />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/card_Icon.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Credit Card</h4>
+											<span>Visa, Mastercard supported</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option" id="debit-card">
+									<input type="radio" name="payment" />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/card_Icon.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Debit Card</h4>
+											<span>Most banks supported</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option" id="coinbase">
+									<input type="radio" name="payment" disabled />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/coinbase_icon.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Coinbase</h4>
+											<span>Buy crypto using your coinbase account</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option" id="applepay">
+									<input type="radio" name="payment" disabled />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/apple_icon.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Apple Pay</h4>
+											<span>Pay securely using Apple Pay</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option" id="googlepay">
+									<input type="radio" name="payment" disabled />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/googlepay_icon.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Google Pay</h4>
+											<span>Fast & secure payments with Google Pay</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+							</div>
+						</div>
+
+						<div class="payment-wrapper patment-card">
+							<div class="title">
+								<div class="icon"><img src="<?php echo esc_url(plugins_url('../assets/images/credit-card.png', __FILE__)); ?>" width="40" height="40" />
+								</div>
+								<h2>Choose your card type</h2>
+								<p>Select the card network to continue securely.</p>
+							</div>
+
+							<div class="payment-list">
+
+								<label class="payment-option">
+									<input type="radio" name="payment" checked />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/visa.png', __FILE__)); ?>" width="33"
+												height="22" /></span>
+										<div>
+											<h4>Visa</h4>
+											<span>Accepted worldwide</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option">
+									<input type="radio" name="payment" />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/Mastercard.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Mastercard</h4>
+											<span>Fast & secure payments</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option">
+									<input type="radio" name="payment" disabled />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/amex.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>American express</h4>
+											<span>Premium card benefits</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+								<label class="payment-option">
+									<input type="radio" name="payment" disabled />
+									<div class="left">
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/Discover.png', __FILE__)); ?>" width="17"
+												height="17" /></span>
+										<div>
+											<h4>Discover</h4>
+											<span>Popular in the US</span>
+										</div>
+									</div>
+									<span class="check gray"></span>
+								</label>
+
+							</div>
+
+							<div class="card-note">
+								<p><i class="fa fa-lock" aria-hidden="true"></i> Your card details are encrypted and
+									secure</p>
+							</div>
+						</div>
+
+						<div class="payment-wrapper payment-info">
+							info
+						</div>
+
+					</div>
+
+					<div class="Pay-content">
+						Pay content
+					</div>
+
+				</div>
+
+
+				<!-- Footer -->
+				<div class="footer-green-border">
+
+
+					<div class="footer-wrp">
+						<span><i class="fa fa-info-circle" aria-hidden="true"></i> We need your date of birth to comply
+							with payment
+							regulations.</span>
+					</div>
+					<div class="modal-footer">
+						<div class="footer-card">
+							<div class="amount">
+								<span>You’ll Pay</span>
+								<div class="price">
+									$103.46 <span class="arrow"><i class="fa fa-angle-down"
+											aria-hidden="true"></i></span>
+								</div>
+							</div>
+
+							<button class="proceed-btn">
+								Proceed
+								<span class="icon"><i class="fa fa-long-arrow-right" aria-hidden="true"></i></span>
+							</button>
+						</div>
+					</div>
+				</div>
+
+			</div>
+		</div>
+		<?php
 	}
 }

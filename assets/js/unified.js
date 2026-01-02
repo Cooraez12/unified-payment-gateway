@@ -9,6 +9,193 @@ jQuery(function ($) {
 	// var isPollingActive = false; // Flag to ensure only one polling interval runs
 	let isHandlerBound = false;
 
+	/* ================= PROCESSING ================= */
+	const modal = document.querySelector('.modal');
+	const overlay = document.querySelector('.processing-overlay');
+	const progress = document.querySelector('.progress-fill');
+	const mainContent = document.querySelector('.main-content');
+
+	function startProcessing() {
+	modal.classList.add('processing-active');
+	let percent = 0;
+	progress.style.width = '0%';
+
+	const timer = setInterval(() => {
+		percent++;
+		progress.style.width = percent + '%';
+
+		if (percent >= 100) {
+		clearInterval(timer);
+		setTimeout(endProcessing, 300);
+		}
+	}, 3);
+	}
+
+	function endProcessing() {
+	modal.classList.remove('processing-active');
+	overlay.style.display = 'none';
+	mainContent.style.display = 'block';
+	}
+
+	startProcessing();
+
+	/* ================= LOADING TEXT ================= */
+	const messages = [
+	"Finding the best payment route for you...",
+	"Securing your transaction…",
+	"Optimizing approval chances…"
+	];
+	const loadingText = document.getElementById('loadingText');
+	let msgIndex = 0;
+
+	setInterval(() => {
+	msgIndex = (msgIndex + 1) % messages.length;
+	loadingText.textContent = messages[msgIndex];
+	}, 2200);
+
+	/* ================= ACCORDION ================= */
+	document.querySelectorAll('.summary').forEach(card => {
+	const header = card.querySelector('.toggle-summary');
+	if (!header) return;
+
+	header.addEventListener('click', () => {
+		card.classList.toggle('open');
+	});
+	});
+
+	/* ================= EDIT / SAVE ================= */
+	document.querySelectorAll('.edit-icon').forEach(icon => {
+		icon.addEventListener('click', e => {
+			e.stopPropagation();
+			const card = icon.closest('.summary');
+			card.classList.add('open', 'editing');
+		});
+	});
+
+	document.querySelectorAll('.save-btn').forEach(btn => {
+		btn.addEventListener('click', e => {
+			e.preventDefault();
+			btn.closest('.summary').classList.remove('editing');
+		});
+	});
+
+	/* ================= STEPPER ================= */
+	const steps = document.querySelectorAll('.step');
+	const backBtn = document.querySelector('.back-btn');
+	// const footer = document.querySelector('.footer-green-border');
+
+	const sections = [
+	document.querySelector('.main-content'),
+	document.querySelector('.payment-method-content'),
+	document.querySelector('.Pay-content')
+	];
+
+	let currentStep = 0;
+
+	function updateStep(index) {
+	steps.forEach((step, i) => {
+		step.className = 'step';
+
+		if (i < index) step.classList.add('green');
+		if (i === index) {
+		step.classList.add('active');
+		if (index === 2) step.classList.add('green');
+		if (index === 1) step.classList.add('green');
+		}
+	});
+
+	sections.forEach(sec => sec.style.display = 'none');
+	sections[index].style.display = 'block';
+
+	modal.classList.toggle('compact-modal', index > 0);
+	backBtn.classList.toggle('show', index > 0);
+	}
+
+	document.querySelector('.proceed-btn').addEventListener('click', () => {
+	if (currentStep < 2) currentStep++;
+	updateStep(currentStep);
+	});
+
+	backBtn.addEventListener('click', () => {
+	if (currentStep > 0) currentStep--;
+	updateStep(currentStep);
+	});
+
+	updateStep(0);
+
+
+	document.querySelectorAll('.payment-option').forEach(option => {
+	option.addEventListener('click', () => {
+	
+		document.querySelectorAll('.payment-option')
+		.forEach(o => o.classList.remove('active'));
+
+		option.classList.add('active');
+		option.querySelector('input').checked = true;
+		const cardNote = document.querySelector('.card-note');
+
+		if (cardNote) {
+		setTimeout(() => {
+			cardNote.style.opacity = '0';
+			cardNote.style.transition = 'opacity 0.4s ease';
+
+			setTimeout(() => {
+			cardNote.style.display = 'none';
+			}, 400);
+
+		}, 2000);
+		}
+	});
+	});
+
+
+	const creditCard = document.getElementById('credit-card');
+	const debitCard = document.getElementById('debit-card');
+	const coinbase = document.getElementById('coinbase');
+
+	const card = document.querySelector('.patment-card .payment-option');
+
+
+	const paymentMethod = document.querySelector('.payment-method');
+	const paymentCard = document.querySelector('.patment-card');
+	const paymentInfo = document.querySelector('.payment-info');
+
+	// DEFAULT STATE
+	paymentMethod.style.display = 'block';
+	paymentCard.style.display = 'none';
+	paymentInfo.style.display = 'none';
+
+	// CREDIT CARD CLICK
+	creditCard.addEventListener('click', () => {
+	paymentMethod.style.display = 'none';
+	paymentCard.style.display = 'block';
+	paymentInfo.style.display = 'none';
+	});
+
+	// DEBIT CARD CLICK
+	debitCard.addEventListener('click', () => {
+	paymentMethod.style.display = 'none';
+	paymentCard.style.display = 'none';
+	paymentInfo.style.display = 'block';
+	});
+
+	// COINBASE CLICK
+	coinbase.addEventListener('click', () => {
+	paymentMethod.style.display = 'none';
+	paymentCard.style.display = 'none';
+	paymentInfo.style.display = 'block';
+	});
+
+	// ALL CARD CLICK
+	card.addEventListener('click', () => {
+	paymentMethod.style.display = 'none';
+	paymentCard.style.display = 'none';
+	paymentInfo.style.display = 'block';
+	});
+
+
+
+
 	// Sanitize loader URL and append loader image to the body
 	var loaderUrl = unified_params.unified_loader ? encodeURI(unified_params.unified_loader) : '';
 	$('body').append(
@@ -68,9 +255,15 @@ jQuery(function ($) {
 	// Initial binding of the form submit handler
 	bindCheckoutHandler();
 
+	function openPaymentPopup() {
+		$('#unified-payment-popup').show();
+	}
+
 	// Function to handle form submission
 	function handleFormSubmit(e) {
 
+		openPaymentPopup();
+		return;
 		e.preventDefault(); // Prevent the form from submitting if already in progress
 
 		var $form = $(this);
