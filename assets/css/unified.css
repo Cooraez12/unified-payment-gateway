@@ -1,0 +1,166 @@
+.unified-popup ::-webkit-scrollbar {
+    block-size: 5px;
+    inline-size: 5px;
+}
+
+.unified-popup ::-webkit-scrollbar-track {
+    border-radius: 5px;
+    background: #E5E5E5;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb {
+    border-radius: 5px;
+    background: #C5CCD3;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb:hover {
+    background: #E5E5E5;
+}
+
+/* horizontal scrollbar */
+.unified-popup ::-webkit-scrollbar-track:horizontal {
+    background: #E5E5E5;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb:horizontal {
+    background: #C5CCD3;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb:hover:horizontal {
+    background: #E5E5E5;
+}
+
+.unified-popup .pl-10 {
+    padding-left: 10px;
+}
+
+.unified-popup .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: flex; /* default flex, not none */
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    visibility: hidden; /* hide initially */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.unified-popup .overlay.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+
+.unified-popup .modal {
+    width: 420px;
+    height: 85vh;
+    background: #F5F5F5;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin: 8px;
+}
+
+.unified-popup .modal.compact-modal {
+    background: linear-gradient(204.83deg, #F7FBF9 0%, #FFFFFF 78.4%);
+}
+
+.unified-popup .modal-header {
+    background: #F6F7F9;
+    box-shadow: 0px 1px 2px 0px #00000014;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+}
+
+.unified-popup .modal.compact-modal .modal-header {
+    background: linear-gradient(204.83deg, #F7FBF9 0%, #FFFFFF 78.4%);
+    border-bottom: 1px solid #ECF6F4;
+    box-shadow: none;
+}
+
+.unified-popup .close-btn {
+    border: none;
+    background: none;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.unified-popup .modal-body {
+    flex: 1;
+    padding: 11px;
+    overflow-y: auto;
+    padding-bottom: 40px;
+}
+
+.unified-popup .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.unified-popup .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.unified-popup .card-header .card-title {
+    display: flex;
+    align-items: center;
+}
+
+.unified-popup .card-header .card-title span {
+    color: #171717;
+    font-weight: 500;
+    font-size: 14px;
+    padding-left: 5px;
+}
+
+.unified-popup .card-header .card-title span span {
+    color: #4B5055;
+    font-weight: 400;
+}
+
+.unified-popup .edit {
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.unified-popup .processing-active .stepper,
+.unified-popup .processing-active .modal-header,
+.unified-popup .processing-active .modal-footer,
+.unified-popup .processing-active .footer-green-border {
+    display: none;
+}
+
+.unified-popup .processing-active .main-content {
+    display: none !important;
+}
+
+.unified-popup .processing-active .processing-overlay {
+    display: flex !important;
+}
+
+.unified-popup .processing-active .modal-body {
+    padding: 0;
+}
+
+.unified-popup .modal.processing-active {
+    background: #fff;
+}
+
+.unified-popup .processing-overlay {
+    height: 100%;
+}
+
+.unified-popup .main-content {
+    animation: fadeInUp 0.35s ease;
+}

@@ -580,12 +580,14 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			}
 
 			$public_key = $this->sandbox ? $account['sandbox_public_key'] : $account['live_public_key'];
+			$secret_key = $this->sandbox ? $account['sandbox_secret_key'] : $account['live_secret_key'];
 
 			$accStatusApiUrl = $this->get_api_url('/api/check-merchant-status');
 			$merchant_status_data = [
 			    'is_sandbox'     => $this->sandbox,
 			    'amount'         => $order->get_total(),
 			    'api_public_key' => $public_key,
+				'api_secret_key' => $secret_key,
 			];
 
 			// Use cache for status check
@@ -703,6 +705,11 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 				'sslverify' => true,
 			]);
 
+			wc_get_logger()->info(
+				'Payment raw response (type=' . gettype($response) . '): ' . print_r($response, true),
+				$logger_context
+			);
+
 			// **Handle Response**
 			if (is_wp_error($response)) {
 				wc_get_logger()->error("HTTP error during payment request: {$response->get_error_message()}", $logger_context);
@@ -714,6 +721,11 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			}
 
 			$response_data = json_decode(wp_remote_retrieve_body($response), true);
+
+			// wc_get_logger()->info(
+			// 	'Payment raw response (type=' . gettype($response_data) . '): ' . print_r($response_data, true),
+			// 	$logger_context
+			// );
 
 			// Ensure sensitive data is sanitized or omitted if necessary.
 			$response_data_str = is_array($response_data) ? json_encode($response_data) : (string)$response_data;
@@ -1001,6 +1013,8 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			}
 		}
 
+		$curr_code = sanitize_text_field($order->get_currency());
+
 		return [
 			'api_secret' => $api_secret, // Use sandbox or live secret key
 			'api_public_key' => $api_public_key, // Add the public key for API calls
@@ -1026,6 +1040,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			'billing_state' => $billing_state,
 			'billing_phone' => $billing_phone,
 			'is_sandbox' => $is_sandbox,
+			'curr_code' => $curr_code,
 			'plugin_version' => $this->version,
 		];
 	}
@@ -1237,6 +1252,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 	        $this->log_info("Checking merchant status for account '{$account['title']}'", [
 	            'useSandbox' => $useSandbox,
 	            'publicKey' => $publicKey,
+				'secretKey' => $secretKey,
 	        ]);
 
 	        $checkStatusUrl = $this->get_api_url('/api/check-merchant-status', $useSandbox);
@@ -1486,7 +1502,8 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		    [
 		        'cart_hash' => $cart_hash,
 		        'Amount'    => $amount,
-		        'Accounts'  => $accounts
+		        'Accounts'  => $accounts,
+				'accStatusApiUrl'=>$accStatusApiUrl
 		    ]
 		);
 
