@@ -2029,6 +2029,25 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		if (!is_checkout()) {
 			return;
 		}
+
+		$customer = WC()->customer;
+		$cart     = WC()->cart;
+
+		$first_name = $customer->get_billing_first_name();
+		$last_name  = $customer->get_billing_last_name();
+		$email      = $customer->get_billing_email();
+		$phone      = $customer->get_billing_phone();
+
+		$address_1  = $customer->get_billing_address_1();
+		$address_2  = $customer->get_billing_address_2();
+		$city       = $customer->get_billing_city();
+		$state      = $customer->get_billing_state();
+		$postcode   = $customer->get_billing_postcode();
+		$country    = $customer->get_billing_country();
+
+		$subtotal = $cart->get_subtotal();
+		$fees     = $cart->get_fee_total();
+		$total    = $cart->get_total('edit');
 		?>
 		<div class="overlay" id="unified-payment-popup" style="display: none;">
 			<div class="modal">
@@ -2112,19 +2131,19 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<div class="summary-body grid">
 									<div>
 										<label>First Name</label>
-										<p>Jenny</p>
+										<p><?php echo esc_html($first_name); ?></p>
 									</div>
 									<div>
 										<label>Last Name</label>
-										<p>Williamson</p>
+										<p><?php echo esc_html($last_name); ?></p>
 									</div>
 									<div>
 										<label>Email</label>
-										<p>jennyw@example.com</p>
+										<p><?php echo esc_html($email); ?></p>
 									</div>
 									<div>
 										<label>Phone Number</label>
-										<p>(415) 555-2671</p>
+										<p><?php echo esc_html($phone); ?></p>
 									</div>
 								</div>
 
@@ -2132,18 +2151,18 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 									<div class="form-grid">
 										<div class="form-group">
 											<label>First Name</label>
-											<input type="text" value="Jenny" placeholder="Enter First Name">
+											<input type="text" value="<?php echo esc_html($first_name); ?>" placeholder="Enter First Name">
 										</div>
 
 										<div class="form-group">
 											<label>Last Name</label>
-											<input type="text" value="Williamson" placeholder="Enter Last Name">
+											<input type="text" value="<?php echo esc_html($last_name); ?>" placeholder="Enter Last Name">
 										</div>
 									</div>
 
 									<div class="form-group">
 										<label>Email</label>
-										<input type="email" value="jennyw@example.com" placeholder="Enter Email">
+										<input type="email" value="<?php echo esc_html($email); ?>" placeholder="Enter Email">
 									</div>
 
 									<div class="form-group">
@@ -2153,7 +2172,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 												🇺🇸
 												<i class="fa fa-angle-down"></i>
 											</div>
-											<input type="text" value="(415) 555-2671" placeholder="Enter Phone Number">
+											<input type="text" value="<?php echo esc_html($phone); ?>" placeholder="Enter Phone Number">
 										</div>
 									</div>
 

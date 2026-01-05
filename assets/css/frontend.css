@@ -1,42 +1,5 @@
 /* Payment Popup CSS Start */
 
-* {
-    box-sizing: border-box;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-}
-::-webkit-scrollbar {
-    block-size: 5px;
-    inline-size: 5px;
-}
-
-::-webkit-scrollbar-track {
-    border-radius: 5px;
-    background: #E5E5E5;
-}
-
-::-webkit-scrollbar-thumb {
-    border-radius: 5px;
-    background: #C5CCD3;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #E5E5E5;
-}
-
-/* horizontal scrollbar */
-
-::-webkit-scrollbar-track:horizontal {
-    background: #E5E5E5;
-}
-
-::-webkit-scrollbar-thumb:horizontal {
-    background: #C5CCD3;
-}
-
-::-webkit-scrollbar-thumb:hover:horizontal {
-    background: #E5E5E5;
-}
-
 #unified-payment-popup.overlay {
     position: fixed;
     inset: 0;
