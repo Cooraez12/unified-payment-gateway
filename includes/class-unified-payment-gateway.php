@@ -2044,6 +2044,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		$state      = $customer->get_billing_state();
 		$postcode   = $customer->get_billing_postcode();
 		$country    = $customer->get_billing_country();
+		$currency_symbol = get_woocommerce_currency_symbol();
 
 		$subtotal = $cart->get_subtotal();
 		$fees     = $cart->get_fee_total();
@@ -2202,8 +2203,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 						<div class="summary">
 							<div class="card-header toggle-summary pl-10">
 								<div class="card-title">
-									<img src="<?php echo esc_url(plugins_url('../assets/images/bill_Icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Billing
-										Address</span>
+									<img src="<?php echo esc_url(plugins_url('../assets/images/bill_Icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Billing Address</span>
 								</div>
 								<!-- <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span> -->
 								<span class="edit-icon billing-address"><i class="fa fa-pencil-square-o"
@@ -2213,7 +2213,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 							<div class="card">
 
 								<div class="summary-body address">
-									<p class="address"> 4517 Washington Ave. Manchester, Kentucky 39495. </p>
+									<p class="address"> <?php echo esc_html($address_1); ?>. </p>
 								</div>
 
 								<div class="middle-content edit-billing-address">
@@ -2273,19 +2273,19 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 							<div class="summary-body">
 								<div class="summary-row">
 									<span>Amount</span>
-									<span>$100.00</span>
+									<span><?php echo esc_html($currency_symbol); ?><?php echo esc_html($subtotal); ?></span>
 								</div>
 
 								<div class="summary-row">
 									<span>Fees</span>
-									<span>$3.46</span>
+									<span><?php echo esc_html($currency_symbol); ?><?php echo esc_html($fees); ?></span>
 								</div>
 
 								<div class="summary-divider"></div>
 
 								<div class="summary-row total">
 									<span>Total Payment</span>
-									<span><b>$103.46</b></span>
+									<span><b><?php echo esc_html($currency_symbol); ?><?php echo esc_html($total); ?></b></span>
 								</div>
 							</div>
 						</div>
@@ -2467,8 +2467,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 							<div class="amount">
 								<span>You’ll Pay</span>
 								<div class="price">
-									$103.46 <span class="arrow"><i class="fa fa-angle-down"
-											aria-hidden="true"></i></span>
+									<?php echo esc_html($currency_symbol); ?><?php echo esc_html($total); ?> <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span>
 								</div>
 							</div>
 
