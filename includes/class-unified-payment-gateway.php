@@ -1163,6 +1163,13 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 				'all' // Media
 			);
 			wp_enqueue_style(
+				'unified-fontawesome-styles',
+				plugins_url('../assets/css/fontawesome.css', __FILE__),
+				[], // Dependencies (if any)
+				'1.0', // Version number
+				'all' // Media
+			);
+			wp_enqueue_style(
 				'unified-payment-loader-styles',
 				plugins_url('../assets/css/loader.css', __FILE__),
 				[], // Dependencies (if any)
@@ -1174,6 +1181,15 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			wp_enqueue_script(
 				'unified-js',
 				plugins_url('../assets/js/unified.js', __FILE__),
+				['jquery'], // Dependencies
+				'1.0', // Version number
+				true // Load in footer
+			);
+
+			// Enqueue payment-popup.js script
+			wp_enqueue_script(
+				'payment-popup-js',
+				plugins_url('../assets/js/payment-popup.js', __FILE__),
 				['jquery'], // Dependencies
 				'1.0', // Version number
 				true // Load in footer
@@ -2126,7 +2142,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 										Details</span>
 								</div>
 								<!-- <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span> -->
-								<span class="edit-icon personal-info"><i class="fa fa-pencil-square-o" aria-hidden="true">Edit</i></span>
+								<span class="edit-icon personal-info"><i class="fa fa-pencil-square-o" aria-hidden="true"></i></span>
 							</div>
 							<div class="card">
 								<div class="summary-body grid">
@@ -2213,17 +2229,17 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 							<div class="card">
 
 								<div class="summary-body address">
-									<p class="address"> <?php echo esc_html($address_1); ?>. </p>
+									<p class="address"> <?php echo esc_html($address_1); ?> </p>
 								</div>
 
 								<div class="middle-content edit-billing-address">
 									<div class="form-group">
 										<label>Address</label>
-										<input type="text" value="jennyw@example.com" placeholder="Enter Address">
+										<input type="text" value="<?php echo esc_html($address_1); ?>" placeholder="Enter Address">
 									</div>
 									<div class="form-group">
 										<label>Address</label>
-										<input type="text" value="jennyw@example.com" placeholder="Enter Address">
+										<input type="text" value="<?php echo esc_html($address_2); ?>" placeholder="Enter Address">
 									</div>
 									<div class="form-grid">
 										<div class="form-group">
@@ -2294,8 +2310,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 					<div class="payment-method-content">
 						<div class="payment-wrapper payment-method">
 							<div class="title">
-								<div class="icon"><img src="<?php echo esc_url(plugins_url('../assets/images/secure-payment.png', __FILE__)); ?>" width="45" height="45" />
-								</div>
+								<div class="icon"><img src="<?php echo esc_url(plugins_url('../assets/images/secure-payment.png', __FILE__)); ?>" width="45" height="45" /></div>
 								<h2>Select a payment method</h2>
 								<p>Securely continue with your preferred option.</p>
 							</div>
@@ -2305,8 +2320,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option" id="credit-card">
 									<input type="radio" name="payment" checked />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/card_Icon.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/card_Icon.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Credit Card</h4>
 											<span>Visa, Mastercard supported</span>
@@ -2318,8 +2332,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option" id="debit-card">
 									<input type="radio" name="payment" />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/card_Icon.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/card_Icon.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Debit Card</h4>
 											<span>Most banks supported</span>
@@ -2331,8 +2344,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option" id="coinbase">
 									<input type="radio" name="payment" disabled />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/coinbase_icon.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/coinbase_icon.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Coinbase</h4>
 											<span>Buy crypto using your coinbase account</span>
@@ -2344,8 +2356,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option" id="applepay">
 									<input type="radio" name="payment" disabled />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/apple_icon.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/apple_icon.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Apple Pay</h4>
 											<span>Pay securely using Apple Pay</span>
@@ -2357,8 +2368,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option" id="googlepay">
 									<input type="radio" name="payment" disabled />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/googlepay_icon.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/googlepay_icon.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Google Pay</h4>
 											<span>Fast & secure payments with Google Pay</span>
@@ -2372,8 +2382,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 
 						<div class="payment-wrapper patment-card">
 							<div class="title">
-								<div class="icon"><img src="<?php echo esc_url(plugins_url('../assets/images/credit-card.png', __FILE__)); ?>" width="40" height="40" />
-								</div>
+								<div class="icon"><img src="<?php echo esc_url(plugins_url('../assets/images/credit-card.gif', __FILE__)); ?>" width="40" height="40" />
 								<h2>Choose your card type</h2>
 								<p>Select the card network to continue securely.</p>
 							</div>
@@ -2396,8 +2405,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option">
 									<input type="radio" name="payment" />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/Mastercard.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+											<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/Mastercard.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Mastercard</h4>
 											<span>Fast & secure payments</span>
@@ -2409,8 +2417,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option">
 									<input type="radio" name="payment" disabled />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/amex.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+											<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/amex.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>American express</h4>
 											<span>Premium card benefits</span>
@@ -2422,8 +2429,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								<label class="payment-option">
 									<input type="radio" name="payment" disabled />
 									<div class="left">
-										<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/Discover.png', __FILE__)); ?>" width="17"
-												height="17" /></span>
+											<span class="pay-icon"><img src="<?php echo esc_url(plugins_url('../assets/images/Discover.png', __FILE__)); ?>" width="17" height="17" /></span>
 										<div>
 											<h4>Discover</h4>
 											<span>Popular in the US</span>
@@ -2435,14 +2441,54 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 							</div>
 
 							<div class="card-note">
-								<p><i class="fa fa-lock" aria-hidden="true"></i> Your card details are encrypted and
-									secure</p>
+								<p><i class="fa fa-lock" aria-hidden="true"></i> Your card details are encrypted and secure</p>
 							</div>
 						</div>
 
 						<div class="payment-wrapper payment-info">
-							info
+
+							<div class="smart-protection">
+								<h3>Smart Payment Protection</h3>
+								<p class="subtitle"> To ensure a successful payment, we may use <b>up to <br /> 3 secure
+										attempts.</b> </p>
+
+								<div class="protection-card">
+									<div class="protection-title">
+										<img src="<?php echo esc_url(plugins_url('../assets/images/pay_1.gif', __FILE__)); ?>" width="27" height="27" />
+										<h4>Primary Payment Attempt</h4>
+									</div>
+									<div class="content">
+										<p> We first process your <b>payment using the selected method</b> for the fastest
+											checkout. </p>
+									</div>
+								</div>
+
+								<div class="protection-card">
+									<div class="protection-title">
+										<img src="<?php echo esc_url(plugins_url('../assets/images/pay_2.gif', __FILE__)); ?>" width="25" height="25" />
+										<h4>Automatic Backup Option</h4>
+									</div>
+									<div class="content">
+										<p> If the first attempt isn’t approved, <b>we’ll retry securely with another provider</b>
+											— no action needed. </p>
+									</div>
+								</div>
+
+								<div class="protection-card">
+									<div class="protection-title">
+										<img src="<?php echo esc_url(plugins_url('../assets/images/pay_3.gif', __FILE__)); ?>" width="25" height="25" />
+										<h4>Guarantee Mode (Highest Success Rate)</h4>
+									</div>
+									<div class="content">
+										<p> If the second attempt also fails, <b>we’ll activate Guarantee Mode </b> to ensure your
+											transaction completes successfully. </p>
+									</div>
+								</div>
+
+							</div>
+
 						</div>
+
 
 					</div>
 
@@ -2453,32 +2499,60 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 				</div>
 
 
-				<!-- Footer -->
-				<div class="footer-green-border">
-
-
-					<div class="footer-wrp">
-						<span><i class="fa fa-info-circle" aria-hidden="true"></i> We need your date of birth to comply
-							with payment
-							regulations.</span>
-					</div>
-					<div class="modal-footer">
-						<div class="footer-card">
-							<div class="amount">
-								<span>You’ll Pay</span>
-								<div class="price">
-									<?php echo esc_html($currency_symbol); ?><?php echo esc_html($total); ?> <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span>
-								</div>
-							</div>
-
-							<button class="proceed-btn">
-								Proceed
-								<span class="icon"><i class="fa fa-long-arrow-right" aria-hidden="true"></i></span>
-							</button>
-						</div>
+				<div class="complete-process" style="display:none">
+					<div class="processing-card">
+						<img src="<?php echo esc_url(plugins_url('../assets/images/success.gif', __FILE__)); ?>" width="90" />
+						<h3>Payment Successful</h3>
+						<p>Your payment has been completed successfully.</p>
 					</div>
 				</div>
 
+
+				<!-- Footer -->
+				<div class="footer-green-border">
+
+					<div class="pay-summary-sheet" id="paySummary">
+						<div class="sheet-header">
+							<div class="sheet-handle"></div>
+							<h3>Payment Summary</h3>
+						</div>
+						<div class="summary-info">
+							<div class="summary-box">
+								<div class="row"><span>Amount</span><span><?php echo esc_html($currency_symbol); ?><?php echo esc_html($subtotal); ?></span></div>
+								<div class="row"><span>Fees</span><span><?php echo esc_html($currency_symbol); ?><?php echo esc_html($fees); ?></span></div>
+								<div class="divider"></div>
+								<div class="row total">
+									<span>Total Payment</span><span><?php echo esc_html($currency_symbol); ?><?php echo esc_html($total); ?></span>
+								</div>
+							</div>
+
+						</div>
+					</div>
+
+					<div>
+						<div class="footer-wrp">
+							<span><i class="fa fa-info-circle" aria-hidden="true"></i> We need your date of birth to comply with
+								payment regulations.</span>
+						</div>
+						<div class="modal-footer">
+							<div class="footer-card">
+								<div class="amount">
+									<span>You’ll Pay</span>
+									<div class="price">
+										<?php echo esc_html($currency_symbol); ?><?php echo esc_html($total); ?> <span class="arrow" id="togglePay"><i class="fa fa-angle-down"
+												aria-hidden="true"></i></span>
+									</div>
+								</div>
+
+								<button class="proceed-btn">
+									Proceed
+									<span class="icon"><i class="fa fa-long-arrow-right" aria-hidden="true"></i></span>
+								</button>
+							</div>
+						</div>
+					</div>
+
+				</div>
 			</div>
 		</div>
 		<?php
