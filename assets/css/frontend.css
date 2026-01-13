@@ -1,6 +1,14 @@
 /* Payment Popup CSS Start */
+#unified-payment-popup.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-#unified-payment-popup.modal {
+#unified-payment-popup .modal {
   width: 420px;
   height: 85vh;
   background: #F5F5F5;
@@ -10,7 +18,7 @@
   overflow: hidden;
   margin: 8px;
 }
-#unified-payment-popup.modal.compact-modal {
+#unified-payment-popup .modal.compact-modal {
   background: linear-gradient(204.83deg, #F7FBF9 0%, #FFFFFF 78.4%);
 
 }
@@ -25,7 +33,7 @@
   border-bottom: 1px solid #eee;
 }
 
-#unified-payment-popup.modal.compact-modal .modal-header {
+#unified-payment-popup .modal.compact-modal .modal-header {
   /* background: linear-gradient(204.83deg, #F7FBF9 0%, #FFFFFF 78.4%); */
   border-bottom: 1px solid #ECF6F4;
   box-shadow: none;
@@ -84,24 +92,24 @@
     opacity: 0.6;
 }
 
-#unified-payment-popup.processing-active .stepper,
-#unified-payment-popup.processing-active .modal-header,
-#unified-payment-popup.processing-active .modal-footer,
-#unified-payment-popup.processing-active .footer-green-border {
+#unified-payment-popup .processing-active .stepper,
+#unified-payment-popup .processing-active .modal-header,
+#unified-payment-popup .processing-active .modal-footer,
+#unified-payment-popup .processing-active .footer-green-border {
   display: none;
 }
 
-#unified-payment-popup.processing-active .main-content {
+#unified-payment-popup .processing-active .main-content {
   display: none !important;
 }
 
-#unified-payment-popup.processing-active .processing-overlay {
+#unified-payment-popup .processing-active .processing-overlay {
   display: flex !important;
 }
-#unified-payment-popup.processing-active .modal-body{
+#unified-payment-popup .processing-active .modal-body{
   padding: 0;
 }
-#unified-payment-popup.modal.processing-active{
+#unified-payment-popup .modal.processing-active{
   background: #fff;
 }
 
@@ -792,10 +800,10 @@
   font-size: 11px;
   font-weight: 400;
 }
-#unified-payment-popup.compact-modal .footer-wrp{
+#unified-payment-popup .compact-modal .footer-wrp{
   height: 33px;
 }
-#unified-payment-popup.compact-modal .footer-wrp span{
+#unified-payment-popup .compact-modal .footer-wrp span{
   display: none;
 }
 #unified-payment-popup .modal-footer {

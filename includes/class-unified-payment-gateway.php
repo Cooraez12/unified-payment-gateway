@@ -1164,7 +1164,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			);
 			wp_enqueue_style(
 				'unified-fontawesome-styles',
-				plugins_url('../assets/css/fontawesome.css', __FILE__),
+				plugins_url('../assets/css/font-awesome.css', __FILE__),
 				[], // Dependencies (if any)
 				'1.0', // Version number
 				'all' // Media
@@ -2073,7 +2073,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 				<div class="modal-header">
 					<button class="back-btn"><i class="fa fa-arrow-left" aria-hidden="true"></i></button>
 					<div class="logo"><img src="<?php echo esc_url(plugins_url('../assets/images/logo.png', __FILE__)); ?>" width="71.5" height="26" /></div>
-					<button class="close-btn">&times;</button>
+					<button class="payment-popup-close-btn close-btn">&times;</button>
 				</div>
 
 				<!-- Content -->
@@ -2164,7 +2164,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 									</div>
 								</div>
 
-								<div class="middle-content edit-personal-info">
+								<div class="middle-content edit-personal-info edit-div">
 									<div class="form-grid">
 										<div class="form-group">
 											<label>First Name</label>
@@ -2222,8 +2222,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 									<img src="<?php echo esc_url(plugins_url('../assets/images/bill_Icon.png', __FILE__)); ?>" width="15" height="15" /> <span>Billing Address</span>
 								</div>
 								<!-- <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span> -->
-								<span class="edit-icon billing-address"><i class="fa fa-pencil-square-o"
-										aria-hidden="true"></i></span>
+								<span class="edit-icon billing-address"><i class="fa fa-pencil-square-o" aria-hidden="true"></i></span>
 							</div>
 
 							<div class="card">
