@@ -1,4 +1,6 @@
 <?php
+if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
+
 // config.php
 if (!defined('UNIFIED_PROTOCOL')) {
     define('UNIFIED_PROTOCOL', is_ssl() ? 'https://' : 'http://');

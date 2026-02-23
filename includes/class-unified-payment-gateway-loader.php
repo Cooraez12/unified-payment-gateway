@@ -37,12 +37,12 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	{
 
 		$this->base_url = UNIFIED_BASE_URL;
-
+		
 		$this->admin_notices = new UNIFIED_PAYMENT_GATEWAY_Admin_Notices();
 
 		add_action('admin_init', [$this, 'unified_handle_environment_check']);
 		add_action('admin_notices', [$this->admin_notices, 'display_notices']);
-		add_action('plugins_loaded', [$this, 'unified_init'], 10);
+		add_action('plugins_loaded', [$this, 'unified_init'], 11);
 
 		// Register the AJAX action callback for checking payment status
 		add_action('wp_ajax_unified_check_payment_status', array($this, 'unified_handle_check_payment_status_request'));
@@ -54,8 +54,41 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		add_action('wp_ajax_unified_manual_sync', [$this, 'unified_manual_sync_callback']);
 		add_filter('cron_schedules', [$this, 'unified_add_cron_interval']);
 		add_action('unified_cron_event', [$this, 'handle_cron_event']);
-	}
+		add_action('wp_ajax_unified_block_gateway_process', [$this,'handle_unified_gateway_ajax']);
+		add_action('wp_ajax_nopriv_unified_block_gateway_process', [$this,'handle_unified_gateway_ajax']); 
+		add_action('wp', function () {
+		    // Allow notices ONLY on checkout page
+		    if ( ! is_checkout() ) {
+			remove_action(
+			    'woocommerce_before_checkout_form',
+			    'woocommerce_output_all_notices',
+			    10
+			);
+			// Clear queued notices (errors, success, info)
+			if ( function_exists( 'wc_clear_notices' ) ) {
+				wc_clear_notices();
+			}
+		    }
 
+		});
+	}
+	
+	function handle_unified_gateway_ajax(){
+		$unifiedPayment = new UNIFIED_PAYMENT_GATEWAY();
+		$orderID = WC()->session->get('store_api_draft_order');	
+		
+		$status = [];
+		if($orderID){
+			$status = $unifiedPayment->process_payment($orderID);
+		}else{
+		
+			wc_add_notice(__('Invalid order.', 'unified-payment-gateway'), 'error');
+			$status = ['result' => 'fail','error' => 'Invalid order.'];
+		}
+		
+		wp_send_json($status);
+		die;
+	}
 
 	/**
 	 * Initializes the plugin.
@@ -71,6 +104,11 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 		// Initialize gateways
 		$this->unified_init_gateways();
+
+		// Register blocks gateway
+		$this->unified_init_blocks();
+		
+		add_action( 'enqueue_block_assets', [ $this, 'register_blocks_assets' ] );
 
 		// Initialize REST API
 		$rest_api = UNIFIED_PAYMENT_GATEWAY_REST_API::get_instance();
@@ -98,6 +136,48 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			$methods[] = 'UNIFIED_PAYMENT_GATEWAY';			
 			return $methods;
 		});
+	}
+
+	private function unified_init_blocks() {
+		
+			if ( class_exists( '\Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType' ) ) {
+
+				require_once UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR . 'includes/class-unified-blocks-gateway.php';
+
+				add_action( 'woocommerce_blocks_payment_method_type_registration', function( $registry ) {
+					$registry->register( new UNIFIED_Blocks_Gateway() );
+				});
+			}
+	
+	}
+	
+	public function register_blocks_assets() {
+		
+		if (is_checkout()) {
+			$image_url = plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/loader.gif';
+			wp_register_script(
+				'unified-blocks-js',
+				plugin_dir_url( UNIFIED_PAYMENT_GATEWAY_FILE ) . 'assets/js/unified-blocks.js',
+				[ 'wc-blocks-registry', 'wc-settings', 'wp-element' ],
+				'1.0.0',
+				true
+			);
+
+			$settings = get_option( 'woocommerce_unified_settings', [] );
+
+			wp_localize_script(
+				'unified-blocks-js',
+				'unified_params',
+				[ 'settings' => $settings,
+				 'ajax_url' => admin_url('admin-ajax.php'),
+				 'unified_loader' => $image_url,
+				 'unified_nonce' => wp_create_nonce('unified_payment'), 
+				 'checkout_url' => wc_get_checkout_url(),
+				 'payment_method' => 'unified' 
+				]
+			);
+	
+		}
 	}
 
 
@@ -219,7 +299,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			wp_send_json_error(['message' => 'Payment gateway not found.']);
 			wp_die();
 		}
-
+		wc_clear_notices();
 		// Determine order status
 		if ($order->is_paid() || (isset($response_data['transaction_status']) && ($response_data['transaction_status'] == "success" || $response_data['transaction_status'] == "paid" || $response_data['transaction_status'] == "processing"))) {
 			$order->update_status($configured_order_status, 'Order marked as ' . $configured_order_status . ' by Unified.');
@@ -228,14 +308,22 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		}
 		
 		if ($order->has_status('failed') || (isset($response_data['transaction_status']) && $response_data['transaction_status'] == "failed")) {
+			wc_add_notice( 'Payment Failed: Transaction declined, please try another card.', 'error' );
 			$order->update_status('failed', 'Order marked as failed by Unified.');
 			wp_send_json_success(['status' => 'failed', 'redirect_url' => $payment_return_url]);
 			exit;
 		}
 		
 		if ($order->has_status('cancelled') || (isset($response_data['transaction_status']) && $response_data['transaction_status'] == "canceled")) {
+			if (WC()->cart) {
+				WC()->cart->empty_cart();
+				WC()->session->cleanup_sessions();
+				WC()->session->destroy_session();
+				WC()->session->set_customer_session_cookie( false );
+			}
+			wc_add_notice( 'Payment Canceled: The Payment method canceled your transaction.', 'error' );
 			$order->update_status('cancelled', 'Order marked as canceled by Unified.');
-			wp_send_json_success(['status' => 'cancelled', 'redirect_url' => $payment_return_url]);
+			wp_send_json_success(['status' => 'cancelled', 'redirect_url' => $order->get_cancel_order_url()]);
 			exit;
 		}
 
@@ -285,9 +373,9 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 		//Get uuid from WP
 		$payment_token = $order->get_meta('_unified_pay_id');
-
+		
 		// Proceed only if the order status is 'pending'
-		if ($order->get_status() === 'pending') {
+		if ($order->get_status() === 'pending' || $order->get_status() === 'processing' || $order->get_status() === 'failed' || $order->get_status() === 'cancelled') {
 			// Call the Unified API to update status
 			$transactionStatusApiUrl = $this->get_api_url('/api/update-txn-status');
 			$response = wp_remote_post($transactionStatusApiUrl, [
@@ -345,7 +433,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			}
 
 			$payment_return_url = $order->get_checkout_order_received_url();
-
+			wc_clear_notices();
 			if (isset($response_data['transaction_status'])) {
 				// Handle transaction status from API
 				switch ($response_data['transaction_status']) {
@@ -363,17 +451,24 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 					case 'failed':
 						try {
+							wc_add_notice( 'Payment Failed: Transaction declined, please try another card.', 'error' );
 							$order->update_status('failed', 'Order marked as failed by Unified.');
-							wp_send_json_success(['message' => 'Order status updated to failed.', 'order_id' => $order_id, 'redirect_url' => $payment_return_url]);
+							wp_send_json_success(['message' => 'Order status updated to failed.', 'order_id' => $order_id, 'notices' => 'Payment Failed: The Payment method rejected your transaction. Please use another card.']);
 						} catch (Exception $e) {
 							wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
 						}
 						break;
 					case 'canceled':
-					case 'expired':
 						try {
+							if (WC()->cart) {
+								WC()->cart->empty_cart();
+								WC()->session->cleanup_sessions();
+								WC()->session->destroy_session();
+								WC()->session->set_customer_session_cookie( false );
+							}
+							wc_add_notice( 'Payment Canceled: The Payment method canceled your transaction.', 'error' );
 							$order->update_status('cancelled', 'Order marked as canceled by Unified.');
-							wp_send_json_success(['message' => 'Order status updated to canceled.', 'order_id' => $order_id, 'redirect_url' => $payment_return_url]);
+							wp_send_json_success(['message' => 'Order status updated to canceled.', 'order_id' => $order_id, 'redirect_url' => $order->get_cancel_order_url(),'notices' => 'Payment Canceled: The Payment method cancelled your transaction.']);
 						} catch (Exception $e) {
 							wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
 						}

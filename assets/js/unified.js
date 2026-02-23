@@ -5,21 +5,17 @@ jQuery(function ($) {
     var orderId;
     var $button;
     var originalButtonText;
-    var isPollingActive = false;
     let popupWindow = null;
-
-    var loaderUrl = unified_params.unified_loader ? encodeURI(unified_params.unified_loader) : '';
-    $('body').append(
-        '<div class="unified-loader-background"></div>' +
-        '<div class="unified-loader"><img src="' + loaderUrl + '" alt="Loading..." /></div>'
-    );
 
     // Prevent default WooCommerce form submission for our method
     $('form.checkout').on('checkout_place_order', function () {
         var selectedPaymentMethod = $('input[name="payment_method"]:checked').val();
-        if (selectedPaymentMethod === unified_params.payment_method) {
-            return false;
-        }
+        if (selectedPaymentMethod === unified_params.payment_method) return false;
+    });
+
+    $('form.wc-block-checkout__form button.wc-block-components-checkout-place-order-button').on('click', function () {
+        var selectedPaymentMethod = $('input[name="radio-control-wc-payment-method-options"]:checked').val();
+        if (selectedPaymentMethod === unified_params.payment_method) return false;
     });
 
     // Assign or remove custom form ID based on selected method
@@ -30,11 +26,8 @@ jQuery(function ($) {
 
         if (selectedMethod === unified_params.payment_method) {
             $form.attr('id', expectedId);
-        } else {
-            // Only remove the ID if it matches ours
-            if ($form.attr('id') === expectedId) {
-                $form.removeAttr('id');
-            }
+        } else if ($form.attr('id') === expectedId) {
+            $form.removeAttr('id');
         }
     }
 
@@ -46,15 +39,34 @@ jQuery(function ($) {
                 return false;
             }
         });
+
+        $('form.wc-block-checkout__form button.wc-block-components-checkout-place-order-button').on("click", function (e) {
+            if ($('input[name="radio-control-wc-payment-method-options"]:checked').val() === unified_params.payment_method) {
+                var errorList = '';
+                var errorFlag = false;
+                $('.wc_er, .wc-block-components-notice-banner').remove();
+                $('form.wc-block-checkout__form input').each(function() {
+                    if (this.hasAttribute('required') && $(this).val() === "") {
+                        errorFlag = true;
+                        const inputLabel = $(this).attr("aria-label");
+                        errorList += '<li>' + inputLabel + ' field required</li>';
+                        $(this).focus().blur();
+                    }
+                });
+                if(errorFlag) {
+                    $('form.wc-block-checkout__form').prepend(
+                        '<div class="wc_er wc-block-components-notice-banner is-error"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path d="M12 3.2c-4.8 0-8.8 3.9-8.8 8.8 0 4.8 3.9 8.8 8.8 8.8 4.8 0 8.8-3.9 8.8-8.8 0-4.8-4-8.8-8.8-8.8zm0 16c-4 0-7.2-3.3-7.2-7.2C4.8 8 8 4.8 12 4.8s7.2 3.3 7.2 7.2c0 4-3.2 7.2-7.2 7.2zM11 17h2v-6h-2v6zm0-8h2V7h-2v2z"></path></svg><ul style="margin:0">' + errorList + '</ul></div>'
+                    );
+                    window.scrollTo(0, 0);
+                    return false;
+                }
+                handleFormSubmit.call($('form.wc-block-checkout__form'), e);
+                return false;
+            }
+        });
     }
 
-    // Handle WooCommerce hooks
-    $(document.body).on("updated_checkout", function () {
-        markCheckoutFormIfNeeded();
-        bindCheckoutHandler();
-    });
-
-    $(document.body).on("change", 'input[name="payment_method"]', function () {
+    $(document.body).on("updated_checkout change", 'input[name="payment_method"]', function () {
         markCheckoutFormIfNeeded();
         bindCheckoutHandler();
     });
@@ -63,208 +75,142 @@ jQuery(function ($) {
     markCheckoutFormIfNeeded();
     bindCheckoutHandler();
 
+    // Input sanitization
+    $('#billing_first_name, #billing_last_name, #billing_city').on('input', function () {
+        this.value = this.value.replace(/[^A-Za-z\s]/g, '');
+    });
+    $('#billing_address_1').on('input', function () {
+        this.value = this.value.replace(/[^A-Za-z0-9\s,.\-#]/g, '');
+    });
+
     function handleFormSubmit(e) {
         e.preventDefault();
         var $form = $(this);
+        $('.wc_er, .wc-block-components-notice-banner').remove();
 
-        // ⚡️ OPEN POP-UP HERE - THIS IS THE CRITICAL CHANGE FOR SAFARI
-        if (isIOS()) {
-            popupWindow = window.open('about:blank', '_blank');
-            if (!popupWindow) {
-                // Handle pop-up blocker case
-                alert('Pop-up blocker detected! Please disable it for this site and try again.');
-                return false;
-            }
-        }
+        var isBlockCheckout = !!$form.find('input[name="radio-control-wc-payment-method-options"]:checked').val();
+        var selectedPaymentMethod = isBlockCheckout ? 
+            $form.find('input[name="radio-control-wc-payment-method-options"]:checked').val() : 
+            $form.find('input[name="payment_method"]:checked').val();
 
-        if (isSubmitting) {
-            console.warn("Checkout already submitting...");
-            return false;
-        }
-
-        isSubmitting = true;
-
-        var selectedPaymentMethod = $form.find('input[name="payment_method"]:checked').val();
         if (selectedPaymentMethod !== unified_params.payment_method) {
             isSubmitting = false;
             return true;
         }
 
-        $button = $form.find('button[type="submit"][name="woocommerce_checkout_place_order"]');
+        // Prevent multiple submissions
+        if (isSubmitting) return false;
+        isSubmitting = true;
+
+        // Pre-open popup with loader
+        var logoUrl = unified_params.unified_loader ? encodeURI(unified_params.unified_loader) : '';
+        popupWindow = window.open('', '_blank', 'width=700,height=700');
+
+        if (popupWindow) {
+            popupWindow.document.write(`
+                <html>
+                <head><title>Secure Payment</title></head>
+                <body style="margin:0; display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; background:#ffffff; text-align:center;">
+                    <div style="padding:20px;">
+                        ${logoUrl ? `<img src="${logoUrl}" style="max-width:150px; height:auto; margin-bottom:25px;" />` : ''}
+                        <h2 style="font-size:18px; color:#333; margin:0;">Connecting to secure payment...</h2>
+                        <p style="font-size:14px; color:#777; margin-top:10px;">Please do not refresh or close this window.</p>
+                    </div>
+                    <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+                </body>
+                </html>
+            `);
+        }
+
+        // Disable button
+        $button = isBlockCheckout ? 
+            $('form.wc-block-checkout__form button.wc-block-components-checkout-place-order-button') :
+            $form.find('button[type="submit"][name="woocommerce_checkout_place_order"]');
         originalButtonText = $button.text();
         $button.prop('disabled', true).text('Processing...');
 
-        $('.unified-loader-background, .unified-loader').show();
-
-        var data = $form.serialize();
+        // Execute AJAX
+        var ajaxUrl = isBlockCheckout ? unified_params.ajax_url : wc_checkout_params.checkout_url;
+        var ajaxData = isBlockCheckout ? { action: 'unified_block_gateway_process', nonce: unified_params.unified_nonce } : $form.serialize();
 
         $.ajax({
             type: 'POST',
-            url: wc_checkout_params.checkout_url,
-            data: data,
-            dataType: 'json',
-            success: function (response) {
-                handleResponse(response, $form);
-            },
-            error: function () {
-                handleError($form);
-            },
-            complete: function () {
-                isSubmitting = false;
-            },
+            url: ajaxUrl,
+            data: ajaxData,
+            dataType: isBlockCheckout ? undefined : 'json',
+            success: function (response) { handleResponse(response, $form); },
+            error: function () { handleError($form, "Server connection error."); },
+            complete: function () { isSubmitting = false; }
         });
 
         return false;
     }
 
-    function isIOS() {
-        return /iP(ad|hone|od)/.test(navigator.userAgent);
-    }
-
-    // The preparePopup function is no longer needed in its current form
-    // as we now open the pop-up directly in handleFormSubmit.
-
     function openPaymentLink(paymentLink) {
-        var sanitizedPaymentLink = paymentLink;
-        var width = 700, height = 700;
-        var left = window.innerWidth / 2 - width / 2;
-        var top = window.innerHeight / 2 - height / 2;
-
-         if (isIOS()) {
-            // ⚡️ RE-USE THE PREVIOUSLY OPENED POP-UP
-            if (popupWindow && !popupWindow.closed) {
-                popupWindow.location.href = sanitizedPaymentLink;
-            } else {
-                // Fallback for unexpected cases
-                popupWindow = window.open(sanitizedPaymentLink, '_blank');
-            }
+        if (popupWindow && !popupWindow.closed) {
+            popupWindow.location.href = paymentLink;
         } else {
-            popupWindow = window.open(
-                sanitizedPaymentLink,
-                'paymentPopup',
-                'width=' + width + ',height=' + height +
-                ',scrollbars=yes,resizable=yes,top=' + top + ',left=' + left
-            );
+            // Fallback to same window if popup blocked
+            window.location.href = paymentLink;
         }
 
-        if (!popupWindow || popupWindow.closed || typeof popupWindow.closed === 'undefined') {
-            // Fallback if blocked
-            window.location.href = sanitizedPaymentLink;
-            resetButton();
-            return;
-        }
-
-        // Polling for payment status (common for all)
-        if (!isPollingActive) {
-            isPollingActive = true;
-            paymentStatusInterval = setInterval(function () {
-                $.ajax({
-                    type: 'POST',
-                    url: unified_params.ajax_url,
-                    data: {
-                        action: 'unified_check_payment_status',
-                        order_id: orderId,
-                        security: unified_params.unified_nonce,
-                    },
-                    dataType: 'json',
-                    success: function (statusResponse) {
-                        if (['success', 'failed', 'cancelled'].includes(statusResponse.data.status)) {
-                            clearInterval(paymentStatusInterval);
-                            clearInterval(popupInterval);
-                            isPollingActive = false;
-
-                            try {
-                                if (popupWindow && !popupWindow.closed) {
-                                    popupWindow.close(); // won’t close iOS tab, but safe
-                                }
-                            } catch (e) {
-                                console.warn('Unable to close popup window:', e);
-                            }
-
-                            if (statusResponse.data.redirect_url) {
-                                window.location.href = statusResponse.data.redirect_url;
-                            }
-                        }
-                    }
-                });
-            }, 5000);
-        }
-
-        // Popup/tab close event (try for all, works on desktop, partial on iOS)
+        // Polling for popup close
         popupInterval = setInterval(function () {
-            try {
-                if (popupWindow.closed) {
-                    clearInterval(popupInterval);
-                    clearInterval(paymentStatusInterval);
-                    isPollingActive = false;
+            if (!popupWindow || popupWindow.closed) {
+                clearInterval(popupInterval);
+                clearInterval(paymentStatusInterval);
 
-                    $.ajax({
-                        type: 'POST',
-                        url: unified_params.ajax_url,
-                        data: {
-                            action: 'unified_popup_closed_event',
-                            order_id: orderId,
-                            security: unified_params.unified_nonce,
-                        },
-                        dataType: 'json',
-                        success: function (response) {
-                            if (response.success && response.data.redirect_url) {
-                                window.location.href = response.data.redirect_url;
-                            }
-                        },
-                        complete: function () {
-                            resetButton();
-                        }
-                    });
-                }
-            } catch (e) {
-                console.warn('Popup check failed:', e);
+                $.post(unified_params.ajax_url, {
+                    action: 'unified_popup_closed_event',
+                    order_id: orderId,
+                    security: unified_params.unified_nonce
+                }, function(response) {
+                    $(document.body).trigger('update_checkout');
+                    if (response.success && response.data?.redirect_url) {
+                        window.location.replace(response.data.redirect_url);
+                    } else if (response.data?.notices) {
+                        $(".wc-block-checkout__form").prepend('<div class="wc-block-components-notice-banner is-error">' + response.data.notices + '</div>');
+                        window.scrollTo(0, 0);
+                    }
+                    resetButton();
+                }, 'json');
             }
         }, 500);
     }
 
     function handleResponse(response, $form) {
-        $('.unified-loader-background, .unified-loader').hide();
         $('.wc_er').remove();
-
         try {
             if (response.result === 'success') {
                 orderId = response.order_id;
-                var paymentLink = response.payment_link;
-                // openPaymentLink now handles loading the URL into the existing pop-up
-                openPaymentLink(paymentLink); 
-                $form.removeAttr('data-result').removeAttr('data-redirect-url');
+                openPaymentLink(response.redirect);
             } else {
-                // If there's an error, close the pre-opened pop-up
-                if (isIOS() && popupWindow && !popupWindow.closed) {
-                    popupWindow.close();
-                }
-                throw response.messages || 'An error occurred during checkout.';
+                if (popupWindow) popupWindow.close();
+                displayError(response?.error || response?.messages || 'Payment initialization failed.', $form);
             }
         } catch (err) {
+            if (popupWindow) popupWindow.close();
             displayError(err, $form);
         }
     }
 
-    function handleError($form) {
-        $('.wc_er').remove();
-        $form.prepend('<div class="wc_er">An error occurred during checkout. Please try again.</div>');
+    function handleError($form, err) {
+        if (popupWindow) popupWindow.close();
+        $form.prepend('<div class="wc_er">' + err + '</div>');
         $('html, body').animate({ scrollTop: $('.wc_er').offset().top - 300 }, 500);
         resetButton();
     }
 
     function displayError(err, $form) {
-        $('.wc_er').remove();
-        $form.prepend('<div class="wc_er">' + err + '</div>');
+        if (popupWindow) popupWindow.close();
+        $('.wc_er, .wc-block-components-notice-banner').remove();
+        $form.prepend('<div class="wc_er wc-block-components-notice-banner is-error">' + err + '</div>');
         $('html, body').animate({ scrollTop: $('.wc_er').offset().top - 300 }, 500);
         resetButton();
     }
 
     function resetButton() {
         isSubmitting = false;
-        if ($button) {
-            $button.prop('disabled', false).text(originalButtonText);
-        }
-        $('.unified-loader-background, .unified-loader').hide();
+        if ($button) $button.prop('disabled', false).text(originalButtonText);
     }
 });
