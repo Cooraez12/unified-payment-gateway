@@ -1,17 +1,17 @@
-=== ByteNFT Payment Gateway ===
-Contributors: ByteNFT
-Tags: woocommerce, payment gateway, fiat, ByteNFT
+=== Unified Payment Gateway ===
+Contributors: Unified
+Tags: woocommerce, payment gateway, fiat, Unified
 Requires at least: 5.0
 Tested up to: 6.9
 Stable tag: 1.0.12
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-The ByteNFT Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fiat payments to sell products on your WooCommerce store.
+The Unified Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fiat payments to sell products on your WooCommerce store.
 
 == Description ==
 
-This plugin integrates ByteNFT Payment Gateway with WooCommerce, enabling you to accept fiat payments. 
+This plugin integrates Unified Payment Gateway with WooCommerce, enabling you to accept fiat payments. 
 
 == Installation ==
 

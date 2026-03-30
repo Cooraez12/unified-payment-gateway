@@ -1,9 +1,9 @@
 <?php
 
 /**
- * Plugin Name: ByteNFT Payment Gateway
- * Description: Use a Credit Card, Debit Card or Google Pay, Apple Pay to complete your purchase via USDC. The transaction will appear on your bank or card statement as *ByteNFT.
- * Author: ByteNFT
+ * Plugin Name: Unified Payment Gateway
+ * Description: Use a Credit Card, Debit Card or Google Pay, Apple Pay to complete your purchase via USDC. The transaction will appear on your bank or card statement as *Unified.
+ * Author: Unified
  * Author URI: https://pay.unified.xyz/
  * Text Domain: unified-payment-gateway
  * Plugin URI: https://github.com/unified/unified-payment-gateway
@@ -11,7 +11,7 @@
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
  *
- * Copyright (c) 2024 ByteNFT
+ * Copyright (c) 2024 Unified
  */
 
 if (!defined('ABSPATH')) {
