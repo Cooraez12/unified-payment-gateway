@@ -1,11 +1,12 @@
 <?php
+
 /**
  * Plugin Name: Unified Payment Gateway
- * Description: This plugin allows you to accept payments in USD through a secure payment gateway integration. Customers can complete their payment process with ease and security.
+ * Description: Use a Credit Card, Debit Card or Google Pay, Apple Pay to complete your purchase via USDC. The transaction will appear on your bank or card statement as *Unified.
  * Author: Unified
- * Author URI: https://www.dfin.ai/
+ * Author URI: https://pay.rt.app/
  * Text Domain: unified-payment-gateway
- * Plugin URI: https://github.com/dfin-ai/unified-payment-gateway
+ * Plugin URI: https://github.com/Cooraez12/unified-payment-gateway
  * Version: 1.0.0
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
@@ -17,70 +18,33 @@ if (!defined('ABSPATH')) {
 	exit;
 }
 
-$unified_config = require __DIR__ . '/config.php';
+define('UNIFIED_PAYMENT_GATEWAY_MIN_PHP_VER', '8.0');
+define('UNIFIED_PAYMENT_GATEWAY_MIN_WC_VER', '6.5.4');
+define('UNIFIED_PAYMENT_GATEWAY_FILE', __FILE__);
+define('UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
-// Define as global (only once, avoid redeclaring)
-$GLOBALS['unified_config'] = $unified_config;
-
-/**
- * ==========================================================
- * 🔑 Plugin Constants
- * ==========================================================
- */
-// Core plugin info
-define('UNIFIED_PLUGIN_ID', $unified_config['id']);
-define('UNIFIED_PLUGIN_NAME', $unified_config['name']);
-define('UNIFIED_PLUGIN_VERSION', $unified_config['version']);
-
-// URLs & Paths
-define('UNIFIED_PLUGIN_HOST', $unified_config['host']);
-define('UNIFIED_PROTOCOL', $unified_config['protocol']);
-define('UNIFIED_BASE_URL', UNIFIED_PROTOCOL . UNIFIED_PLUGIN_HOST);
-
-define('UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR', $unified_config['paths']['dir']);
-define('UNIFIED_PAYMENT_GATEWAY_FILE', $unified_config['paths']['file']);
-define('UNIFIED_ASSETS_URL', $unified_config['paths']['assets']);
-
-// Requirements
-define('UNIFIED_PAYMENT_GATEWAY_MIN_PHP_VER', $unified_config['requirements']['php']);
-define('UNIFIED_PAYMENT_GATEWAY_MIN_WC_VER', $unified_config['requirements']['wc']);
-
-/**
- * ==========================================================
- * 🔧 Includes
- * ==========================================================
- */
+// Include utility functions
 require_once UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR . 'includes/unified-payment-gateway-utils.php';
-include_once UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR . 'migration.php';
 
 // Migrations functions
 include_once plugin_dir_path(__FILE__) . 'migration.php';
 
 // Autoload classes
 spl_autoload_register(function ($class) {
-    if (strpos($class, 'UNIFIED_PAYMENT_GATEWAY') === 0) {
-        $class_file = UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR . 'includes/class-' . str_replace('_', '-', strtolower($class)) . '.php';
-        if (file_exists($class_file)) {
-            require_once $class_file;
-        }
-    }
+	if (strpos($class, 'UNIFIED_PAYMENT_GATEWAY') === 0) {
+		$class_file = UNIFIED_PAYMENT_GATEWAY_PLUGIN_DIR . 'includes/class-' . str_replace('_', '-', strtolower($class)) . '.php';
+		if (file_exists($class_file)) {
+			require_once $class_file;
+		}
+	}
 });
-
-// Immediately after including the loader class
-add_filter(
-    'plugin_action_links_' . plugin_basename(__FILE__),
-    ['UNIFIED_PAYMENT_GATEWAY_Loader', 'unified_plugin_action_links']
-);
 
 UNIFIED_PAYMENT_GATEWAY_Loader::get_instance();
 
-/**
- * ==========================================================
- * 🛑 Cancel Unpaid Orders
- * ==========================================================
- */
 add_action('woocommerce_cancel_unpaid_order', 'unified_cancel_unpaid_order_action');
 add_action('woocommerce_order_status_cancelled', 'unified_cancel_unpaid_order_action');
+add_action('woocommerce_order_status_changed', 'unified_cancel_unpaid_order_action', 10, 4);
+
 
 /**
  * Cancels an unpaid order after a specified timeout.
@@ -134,108 +98,110 @@ function unified_cancel_unpaid_order_action($order_id)
 		return;
 	}
 
-	$pending_time = get_post_meta($order_id, '_pending_order_time', true);
-	$pending_time = is_numeric($pending_time) ? (int) $pending_time : 0;
+	if ($order->get_status() === 'cancelled') {
+		$pending_time = get_post_meta($order_id, '_pending_order_time', true);
+		$pending_time = is_numeric($pending_time) ? (int) $pending_time : 0;
 
-	if ($order->has_status('pending')) {
-		if ((time() - $pending_time) < (30 * 60)) {
-			wc_get_logger()->info('Order still within pending timeout. Skipping cancel.', [
+		if ($order->has_status('pending')) {
+			if ((time() - $pending_time) < (30 * 60)) {
+				wc_get_logger()->info('Order still within pending timeout. Skipping cancel.', [
+					'source'  => 'unified-payment-gateway',
+					'context' => ['order_id' => $order_id],
+				]);
+				return;
+			}
+
+			$order->update_status('cancelled', 'Order automatically cancelled due to unpaid timeout.');
+			wc_reduce_stock_levels($order_id);
+			wp_cache_delete('unified_payment_link_uuid_' . $order_id, 'unified_payment_gateway');
+			wp_cache_delete('unified_payment_row_' . $order_id, 'unified_payment_gateway'); // Clear row cache
+
+			wc_get_logger()->info('Order auto-cancelled due to unpaid timeout.', [
 				'source'  => 'unified-payment-gateway',
 				'context' => ['order_id' => $order_id],
+			]);
+		}
+
+		$table_name  = $wpdb->prefix . 'order_payment_link';
+		$cache_key   = 'unified_payment_row_' . intval($order_id);
+		$cache_group = 'unified_payment_gateway';
+
+		$payment_row = wp_cache_get($cache_key, $cache_group);
+
+		if (false === $payment_row) {
+			// Escape table name safely
+			$safe_table_name = esc_sql($table_name);
+
+			// Build query safely: only $order_id is dynamic
+			$sql = "SELECT * FROM {$safe_table_name} WHERE order_id = %d LIMIT 1";
+
+			// PHPCS: ignore direct DB query warning here
+			// PHPCS: ignore PreparedSQL.NotPrepared warning for table name interpolation
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$payment_row = $wpdb->get_row($wpdb->prepare($sql, intval($order_id)), ARRAY_A);
+
+			if ($payment_row) {
+				wp_cache_set($cache_key, $payment_row, $cache_group, 5 * MINUTE_IN_SECONDS);
+			}
+		}
+
+		$uuid           = sanitize_text_field($payment_row['uuid'] ?? '');
+		$payment_link   = esc_url_raw($payment_row['payment_link'] ?? '');
+		$customer_email = sanitize_email($payment_row['customer_email'] ?? '');
+		$amount         = number_format(floatval($payment_row['amount'] ?? 0), 8, '.', '');
+
+		if (empty($uuid)) {
+			wc_get_logger()->error('Missing or invalid UUID in payment link table.', [
+				'source'  => 'unified-payment-gateway',
+				'context' => ['order_id' => $order_id, 'uuid' => $uuid],
 			]);
 			return;
 		}
 
-		$order->update_status('cancelled', 'Order automatically cancelled due to unpaid timeout.');
-		wc_reduce_stock_levels($order_id);
-		wp_cache_delete('unified_payment_link_uuid_' . $order_id, 'unified_payment_gateway');
-		wp_cache_delete('unified_payment_row_' . $order_id, 'unified_payment_gateway'); // Clear row cache
+		$apiPath  = '/api/cancel-order-link';
+		$url      = UNIFIED_BASE_URL . $apiPath;
+		$cleanUrl = esc_url(preg_replace('#(?<!:)//+#', '/', $url));
 
-		wc_get_logger()->info('Order auto-cancelled due to unpaid timeout.', [
-			'source'  => 'unified-payment-gateway',
-			'context' => ['order_id' => $order_id],
+		$request_payload = [
+			'order_id'   => $order_id,
+			'order_uuid' => $uuid,
+			'status'     => 'canceled',
+		];
+
+		$response = wp_remote_post($cleanUrl, [
+			'method'    => 'POST',
+			'timeout'   => 30,
+			'body'      => json_encode($request_payload),
+			'headers'   => ['Content-Type' => 'application/json'],
+			'sslverify' => true,
 		]);
+
+		if (is_wp_error($response)) {
+			wc_get_logger()->error("Cancel API call failed. Order ID: {$order_id}", [
+				'source'  => 'unified-payment-gateway',
+				'context' => [
+					'order_id' => $order_id,
+					'uuid'     => $uuid,
+					'error'    => $response->get_error_message(),
+				],
+			]);
+		} else {
+			$response_body    = wp_remote_retrieve_body($response);
+			$decoded_response = json_decode($response_body, true);
+
+			wc_get_logger()->info("Cancel API response received for Order ID: {$order_id}.", [
+				'source'  => 'unified-payment-gateway',
+				'context' => [
+					'order_id'       => $order_id,
+					'uuid'           => $uuid,
+					'payment_link'   => $payment_link,
+					'customer_email' => $customer_email,
+					'amount'         => number_format((float) $amount, 2, '.', ''),
+					'response'       => $decoded_response,
+				],
+			]);
+		}
 	}
-
-	// ====== Cancel Payment Link API ======
-	$table_name   = esc_sql($wpdb->prefix . 'order_payment_link');
-	$cache_key    = 'unified_payment_row_' . $order_id;
-	$cache_group  = 'unified_payment_gateway';
-
-	$payment_row = wp_cache_get($cache_key, $cache_group);
-
-	if (false === $payment_row) {
-	    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table_name is safe, built from $wpdb->prefix
-	    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- direct query is safe and properly prepared
-	    $payment_row = $wpdb->get_row(
-	        $wpdb->prepare(
-	            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $table_name is not user input
-	            "SELECT * FROM `{$table_name}` WHERE `order_id` = %d LIMIT 1",
-	            (int) $order_id
-	        ),
-	        ARRAY_A
-	    );
-
-	    if ($payment_row) {
-	        wp_cache_set($cache_key, $payment_row, $cache_group, 5 * MINUTE_IN_SECONDS);
-	    }
-	}
-
-	$uuid           = sanitize_text_field($payment_row['uuid'] ?? '');
-	$payment_link   = esc_url_raw($payment_row['payment_link'] ?? '');
-	$customer_email = sanitize_email($payment_row['customer_email'] ?? '');
-	$amount         = number_format(floatval($payment_row['amount'] ?? 0), 8, '.', '');
-
-	if (empty($uuid)) {
-		wc_get_logger()->error('Missing or invalid UUID in payment link table.', [
-			'source'  => 'unified-payment-gateway',
-			'context' => ['order_id' => $order_id, 'uuid' => $uuid],
-		]);
-		return;
-	}
-
-	$apiPath  = '/api/cancel-order-link';
-	$url      = UNIFIED_BASE_URL . $apiPath;
-	$cleanUrl = esc_url(preg_replace('#(?<!:)//+#', '/', $url));
-
-	$request_payload = [
-		'order_id'   => $order_id,
-		'order_uuid' => $uuid,
-		'status'     => 'canceled',
-	];
-
-	$response = wp_remote_post($cleanUrl, [
-		'method'    => 'POST',
-		'timeout'   => 30,
-		'body'      => json_encode($request_payload),
-		'headers'   => ['Content-Type' => 'application/json'],
-		'sslverify' => true,
-	]);
-
-	if (is_wp_error($response)) {
-		wc_get_logger()->error("Cancel API call failed. Order ID: {$order_id}", [
-			'source'  => 'unified-payment-gateway',
-			'context' => [
-				'order_id' => $order_id,
-				'uuid'     => $uuid,
-				'error'    => $response->get_error_message(),
-			],
-		]);
-	} else {
-		$response_body    = wp_remote_retrieve_body($response);
-		$decoded_response = json_decode($response_body, true);
-
-		wc_get_logger()->info("Cancel API response received for Order ID: {$order_id}.", [
-			'source'  => 'unified-payment-gateway',
-			'context' => [
-				'order_id'       => $order_id,
-				'uuid'           => $uuid,
-				'payment_link'   => $payment_link,
-				'customer_email' => $customer_email,
-				'amount'         => number_format((float) $amount, 2, '.', ''),
-				'response'       => $decoded_response,
-			],
-		]);
-	}
+	
 }
 
