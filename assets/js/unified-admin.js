@@ -94,31 +94,59 @@ jQuery(document).ready(function ($) {
 				updateAccountIndices();
 			});
 
+			function generateUniqueId() {
+				const randomNumber = Math.floor(100000 + Math.random() * 900000); // 6 digit
+				return 'acc_' + randomNumber;
+			}
+
 			/**
 			 * Add new account block
 			 */
 			$(document).on("click", addAccountBtnClass, function () {
-				const newAccountHtml = `
-					<div class="${gateway_id}-account">
-						<div class="title-blog">
-							<h4>
-								<span class="${gateway_id}-name-display account-name-display">Untitled Account</span>
-								&nbsp;<i class="fa fa-caret-down ${gateway_id}-toggle-btn" aria-hidden="true"></i>
-							</h4>
-							<div class="action-button">
-								<button type="button" class="delete-account-btn"><i class="fa fa-trash" aria-hidden="true"></i></button>
-							</div>
-						</div>
+				const unique_id = generateUniqueId();
 
-						<div class="${gateway_id}-info" style="display: none;">
-							<div class="add-blog title-priority">
-								<div class="account-input account-name">
-									<label>Account Name</label>
-									<input type="text" class="${gateway_id}-title account-title" name="accounts[][title]" placeholder="Account Title">
+				   const newAccountHtml = `
+					   <div class="${gateway_id}-account">
+						   <div class="title-blog">
+							   <h4>
+								   <span class="${gateway_id}-name-display account-name-display">Untitled Account</span>
+								   &nbsp;<i class="fa fa-caret-down ${gateway_id}-toggle-btn" aria-hidden="true"></i>
+							   </h4>
+							   <div class="action-button">
+								   <button type="button" class="delete-account-btn"><i class="fa fa-trash" aria-hidden="true"></i></button>
+							   </div>
+						   </div>
+
+						   <div class="${gateway_id}-info" style="display: none;">
+							   <div class="add-blog title-priority">
+								   <div class="account-input account-name">
+									   <label>Account Name</label>
+									   <input type="text" class="${gateway_id}-title account-title" name="accounts[][title]" placeholder="Account Title">
+								   </div>
+								   <div>
+									   <input type="hidden"
+										   class="${gateway_id}-title unique-id"
+										   name="accounts[][unique_id]"
+										   value="${unique_id}" 
+										   readonly>
+								   </div>
+								   <div class="account-input priority-name">
+									   <label>Priority</label>
+									   <input type="number" class="account-priority" name="accounts[][priority]" placeholder="Priority" min="1" value="${$(accountClass).length + 1}">
+								   </div>
+							   </div>
+
+							<div class="add-blog">
+								<div class="account-input">
+									<label>Checkout Title</label>
+									<input type="text" name="accounts[][checkout_title]" placeholder="Title shown to customers at checkout" value="">
 								</div>
-								<div class="account-input priority-name">
-									<label>Priority</label>
-									<input type="number" class="account-priority" name="accounts[][priority]" placeholder="Priority" min="1" value="${$(accountClass).length + 1}">
+							</div>
+
+							<div class="add-blog">
+								<div class="account-input">
+									<label>Checkout Subtitle</label>
+									<textarea class="checkout-subtitle" name="accounts[][checkout_subtitle]" placeholder="Subtitle/description shown below the title at checkout" rows="2"></textarea>
 								</div>
 							</div>
 
@@ -215,7 +243,7 @@ jQuery(document).ready(function ($) {
 				const liveSecretKey = $account.find(".live-secret-key");
 				const sandboxPublicKey = $account.find(".sandbox-public-key");
 				const sandboxSecretKey = $account.find(".sandbox-secret-key");
-				const sandboxCheckbox = $account.find(`.${gatewayId}-sandbox-checkbox`);
+				const sandboxCheckbox = $account.find("." + gatewayId + "-sandbox-checkbox");
 				const title = $account.find(".account-title");
 				const priority = $account.find(".account-priority");
 
@@ -336,7 +364,7 @@ jQuery(document).ready(function ($) {
 				method: 'POST',
 				dataType: 'json',
 				data: {
-					action: `${id}_manual_sync`, // assuming different action per gateway (optional)
+					action: `${id}_manual_sync`,
 					nonce: unified_admin_data.nonce
 				},
 				success: function (response) {
@@ -414,10 +442,22 @@ jQuery(document).ready(function ($) {
 						var sandboxEnabled = $('#woocommerce_'+gatewayId+'_sandbox').is(':checked'); // <-- Updated
 						var statusLabel = $account.find('.account-status-label');
 
+						// Tooltip content based on status
+						const statusTooltips = {
+							active: 'The account is valid and ready to use.',
+							inactive: 'The account is currently inactive. Please check your settings.',
+							invalid: 'The account credentials are incorrect or incomplete.',
+							unknown: 'The account status could not be determined.',
+						};
+
+						// Determine tooltip content
+						const tooltipText = statusTooltips[newStatus.toLowerCase()] || '';
+
 						if ((sandboxEnabled && mode === 'sandbox') || (!sandboxEnabled && mode === 'live')) {
 							statusLabel
 								.removeClass('active inactive invalid unknown')
 								.addClass(newStatus.toLowerCase())
+								.attr('title', tooltipText)
 								.text((mode === 'sandbox' ? 'Sandbox Account Status: ' : 'Live Account Status: ') + capitalize(newStatus));
 						}
 					}
@@ -430,10 +470,11 @@ jQuery(document).ready(function ($) {
 			return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
 		}
 
-		// When checkbox is changed, update statuses
+		// ✅ Correct: Run sync again when sandbox toggle is changed
 		$('#woocommerce_'+gatewayId+'_sandbox').on('change', function () {
-			updateAccountStatuses();
+			runAccountSync(gatewayId);
 		});
+
 
 	} else {
 		console.log('Could not identify form for gateway: ' + gatewayId);

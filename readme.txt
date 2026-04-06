@@ -1,17 +1,17 @@
-=== Unified Payment Gateway ===
-Contributors: Unified
-Tags: woocommerce, payment gateway, fiat, Unified
+=== Unifed Payment Gateway ===
+Contributors: Unifed
+Tags: woocommerce, payment gateway, fiat, Unifed
 Requires at least: 5.0
 Tested up to: 6.9
-Stable tag: 1.0.0
+Stable tag: 1.0.13
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
-The Unified Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fiat payments to sell products on your WooCommerce store.
+The Unifed Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fiat payments to sell products on your WooCommerce store.
 
 == Description ==
 
-This plugin integrates Unified Payment Gateway with WooCommerce, enabling you to accept fiat payments. 
+This plugin integrates Unifed Payment Gateway with WooCommerce, enabling you to accept fiat payments. 
 
 == Installation ==
 
@@ -23,7 +23,7 @@ This plugin integrates Unified Payment Gateway with WooCommerce, enabling you to
 
 = How do I obtain API keys? =
 
-Visit the Unified website and log in to your account. Navigate to Developer Settings to generate or retrieve API keys.
+Visit the RT APP website and log in to your account. Navigate to Developer Settings to generate or retrieve API keys.
 
 == Changelog ==
 
@@ -37,4 +37,4 @@ Initial release.
 
 == Support ==
 
-For support, visit: [https://www.dfin.ai/reach-out](https://www.dfin.ai/reach-out)
+For support, visit: [https://pay.rt.app/reach-out](https://pay.rt.app/reach-out)

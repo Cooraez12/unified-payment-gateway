@@ -2,7 +2,10 @@
 if (!defined('ABSPATH')) {
 	exit; // Exit if accessed directly.
 }
-use Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType;
+
+// Include the configuration file
+require_once plugin_dir_path(__FILE__) . 'config.php';
+
 /**
  * Class UNIFIED_PAYMENT_GATEWAY_Loader
  * Handles the loading and initialization of the Unified Payment Gateway plugin.
@@ -13,7 +16,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	private $admin_notices;
 
 	private $base_url;
-	private $gateway_id;
+
 	/**
 	 * Get the singleton instance of this class.
 	 * @return UNIFIED_PAYMENT_GATEWAY_Loader
@@ -34,13 +37,12 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	{
 
 		$this->base_url = UNIFIED_BASE_URL;
-		$this->gateway_id = UNIFIED_PLUGIN_ID;
-
+		
 		$this->admin_notices = new UNIFIED_PAYMENT_GATEWAY_Admin_Notices();
 
 		add_action('admin_init', [$this, 'unified_handle_environment_check']);
 		add_action('admin_notices', [$this->admin_notices, 'display_notices']);
-		add_action('plugins_loaded', [$this, 'unified_init'], 11);	
+		add_action('plugins_loaded', [$this, 'unified_init'], 10);
 
 		// Register the AJAX action callback for checking payment status
 		add_action('wp_ajax_unified_check_payment_status', array($this, 'unified_handle_check_payment_status_request'));
@@ -54,15 +56,87 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		add_action('unified_cron_event', [$this, 'handle_cron_event']);
 		add_action('wp_ajax_unified_block_gateway_process', [$this,'handle_unified_gateway_ajax']);
 		add_action('wp_ajax_nopriv_unified_block_gateway_process', [$this,'handle_unified_gateway_ajax']); 
-		
+		add_action('wp', function () {
+		    // Allow notices ONLY on checkout page
+		    if ( ! is_checkout() ) {
+			remove_action(
+			    'woocommerce_before_checkout_form',
+			    'woocommerce_output_all_notices',
+			    10
+			);
+			// Clear queued notices (errors, success, info)
+			if ( function_exists( 'wc_clear_notices' ) ) {
+				wc_clear_notices();
+			}
+		    }
+
+		});
+
+		add_action('woocommerce_checkout_create_order', function($order){
+			$order->delete_meta_data('_wc_order_attribution_session_entry');
+		}, 10);
+		add_action('init', function() {
+			if (function_exists('WC') && WC()->session == null) {
+				WC()->initialize_session();
+			}
+		});
+
+		add_action('woocommerce_before_checkout_form', [$this, 'unified_show_checkout_error']);
 	}
 
+	/**
+	 * ── FIXED ──────────────────────────────────────────────────────────────────
+	 * Handle the block checkout AJAX payment request.
+	 *
+	 * Root cause of "No available payment accounts":
+	 * `new UNIFIED_PAYMENT_GATEWAY()` creates a cold instance. In an AJAX
+	 * context WooCommerce has not called init_settings() on it, so
+	 * $this->sandbox defaults to false and get_option() returns empty values.
+	 * get_next_available_account() then finds no matching keys → returns false.
+	 *
+	 * Fix: pull the already-booted instance from WC()->payment_gateways().
+	 * That instance was fully initialised during the normal WC boot cycle so
+	 * sandbox mode and account keys are correct.
+	 * ───────────────────────────────────────────────────────────────────────────
+	 */
 	function handle_unified_gateway_ajax(){
-		$unifiedPayment = new UNIFIED_PAYMENT_GATEWAY();
-		$orderID = WC()->session->get('store_api_draft_order');	
+
+		// Nonce verification
+		$nonce = isset($_POST['nonce'])
+			? sanitize_text_field(wp_unslash($_POST['nonce']))
+			: '';
+
+		if (empty($nonce) || !wp_verify_nonce($nonce, 'unified_payment')) {
+			wp_send_json(['result' => 'fail', 'error' => 'Security check failed.']);
+			die;
+		}
+
+		// Pull the already-initialised gateway from the WC registry.
+		// Never use `new UNIFIED_PAYMENT_GATEWAY()` here — see note above.
+		$gateways       = WC()->payment_gateways()->payment_gateways();
+		$unifiedPayment = $gateways['unified'] ?? null;
+
+		if (!$unifiedPayment) {
+			// Fallback: manually instantiate and force-load settings from DB.
+			// Should never happen in normal operation.
+			$unifiedPayment = new UNIFIED_PAYMENT_GATEWAY();
+			$unifiedPayment->init_settings();
+			$unifiedPayment->load_gateway_settings();
+
+			wc_get_logger()->warning(
+				'Unified: gateway not found in WC registry during AJAX — fell back to manual instantiation.',
+				['source' => 'unified-payment-gateway']
+			);
+		}
+
+		$orderID = WC()->session ? WC()->session->get('store_api_draft_order') : null;
+
 		$status = [];
 		if($orderID){
 			$status = $unifiedPayment->process_payment($orderID);
+		}else{
+			wc_add_notice(__('Invalid order.', 'unified-payment-gateway'), 'error');
+			$status = ['result' => 'fail','error' => 'Invalid order.'];
 		}
 		
 		wp_send_json($status);
@@ -86,15 +160,39 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 		// Register blocks gateway
 		$this->unified_init_blocks();
-			
+		
 		add_action( 'enqueue_block_assets', [ $this, 'register_blocks_assets' ] );
 
 		// Initialize REST API
 		$rest_api = UNIFIED_PAYMENT_GATEWAY_REST_API::get_instance();
 		$rest_api->unified_register_routes();
 
+		// Add plugin action links
+		add_filter('plugin_action_links_' . plugin_basename(UNIFIED_PAYMENT_GATEWAY_FILE), [$this, 'unified_plugin_action_links']);
+
 		// Add plugin row meta
 		add_filter('plugin_row_meta', [$this, 'unified_plugin_row_meta'], 10, 2);
+	}
+
+	public function unified_show_checkout_error()
+	{
+		if (!function_exists('WC')) return;
+
+		$error = WC()->session->get('unified_error');
+		if (!$error) return;
+
+		$messages = [
+			'failed'    => 'Payment failed. Please try again.',
+			'cancelled' => 'Payment was cancelled.',
+			'expired'   => 'Payment session expired. Please try again.'
+		];
+
+		// Clear error immediately
+		WC()->session->__unset('unified_error');
+
+		if (isset($messages[$error])) {
+			wc_add_notice($messages[$error], 'error');
+		}
 	}
 
 	/**
@@ -126,12 +224,11 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			}
 	
 	}
-
-
+	
 	public function register_blocks_assets() {
 		
 		if (is_checkout()) {
-			
+			$image_url = plugin_dir_url( dirname( __FILE__ ) ) . 'assets/images/loader.gif';
 			wp_register_script(
 				'unified-blocks-js',
 				plugin_dir_url( UNIFIED_PAYMENT_GATEWAY_FILE ) . 'assets/js/unified-blocks.js',
@@ -147,15 +244,16 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 				'unified_params',
 				[ 'settings' => $settings,
 				 'ajax_url' => admin_url('admin-ajax.php'),
-				 'unified_loader' => plugins_url('../assets/images/loader.gif', __FILE__),
+				 'unified_loader' => $image_url,
 				 'unified_nonce' => wp_create_nonce('unified_payment'), 
 				 'checkout_url' => wc_get_checkout_url(),
-				 'payment_method' => $this->gateway_id 
+				 'payment_method' => 'unified' 
 				]
 			);
 	
 		}
 	}
+
 
 	private function get_api_url($endpoint)
 	{
@@ -167,11 +265,13 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	 * @param array $links
 	 * @return array
 	 */
-	public static function unified_plugin_action_links($links) {
-	    $plugin_links = [
-	        '<a href="' . esc_url(admin_url('admin.php?page=wc-settings&tab=checkout&section=unified')) . '">' . esc_html__('Settings', 'unified-payment-gateway') . '</a>',
-	    ];
-	    return array_merge($plugin_links, $links);
+	public function unified_plugin_action_links($links)
+	{
+		$plugin_links = [
+			'<a href="' . esc_url(admin_url('admin.php?page=wc-settings&tab=checkout&section=unified')) . '">' . esc_html__('Settings', 'unified-payment-gateway') . '</a>',
+		];
+
+		return array_merge($plugin_links, $links);
 	}
 
 	/**
@@ -184,8 +284,8 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	{
 		if (plugin_basename(UNIFIED_PAYMENT_GATEWAY_FILE) === $file) {
 			$row_meta = [
-				'docs'    => '<a href="' . esc_url(apply_filters('unified_docs_url', 'https://www.dfin.ai/api/docs/wordpress-plugin')) . '" target="_blank">' . esc_html__('Documentation', 'unified-payment-gateway') . '</a>',
-				'support' => '<a href="' . esc_url(apply_filters('unified_support_url', 'https://www.dfin.ai/reach-out')) . '" target="_blank">' . esc_html__('Support', 'unified-payment-gateway') . '</a>',
+				'docs'    => '<a href="' . esc_url(apply_filters('unified_docs_url', 'https://pay.unified.xyz/api/docs/wordpress-plugin')) . '" target="_blank">' . esc_html__('Documentation', 'unified-payment-gateway') . '</a>',
+				'support' => '<a href="' . esc_url(apply_filters('unified_support_url', 'https://pay.unified.xyz/reach-out')) . '" target="_blank">' . esc_html__('Support', 'unified-payment-gateway') . '</a>',
 			];
 
 			$links = array_merge($links, $row_meta);
@@ -210,7 +310,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	 * Handle the AJAX request for checking payment status.
 	 * @param $request
 	 */
-	public function unified_handle_check_payment_status_request()
+	public function unified_handle_check_payment_status_request($request)
 	{
 		check_ajax_referer('unified_payment', 'security');
 
@@ -231,22 +331,30 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	 */
 	public function unified_check_payment_status($order_id)
 	{
-	    // Get the order details
-	    $order = wc_get_order($order_id);
+		// Get the order details
+		$order = wc_get_order($order_id);
 
-	    if (!$order) {
-	        return new WP_REST_Response(['error' => esc_html__('Order not found', 'unified-payment-gateway')], 404);
-	    }
+		if (!$order) {
+			return new WP_REST_Response(['error' => esc_html__('Order not found', 'unified-payment-gateway')], 404);
+		}
+
+		// Sanitize and unslash the 'security' value
+		$security = isset($_POST['security']) ? sanitize_text_field(wp_unslash($_POST['security'])) : '';
+
+		// Check the nonce for security
+		if (empty($security) || !wp_verify_nonce($security, 'unified_payment')) {
+			wp_send_json_error(['message' => 'Nonce verification failed.']);
+			wp_die();
+		}
 
 		$payment_token = $order->get_meta('_unified_pay_id');
-		$public_key    = $order->get_meta('_unified_public_key');
 		$transactionStatusApiUrl = $this->get_api_url('/api/update-txn-status');
 		$response = wp_remote_post($transactionStatusApiUrl, [
 			'method'    => 'POST',
 			'body'      => wp_json_encode(['order_id' => $order_id, 'payment_token' => $payment_token]),
 			'headers'   => [
 				'Content-Type'  => 'application/json',
-				'Authorization' => 'Bearer ' . $public_key,
+				'Authorization' => 'Bearer ' . $security,
 			],
 			'timeout'   => 15,
 		]);
@@ -256,15 +364,16 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			
 		$payment_return_url = $order->get_checkout_order_received_url();
 
+		$gateway_id = 'unified'; // Replace with your gateway ID
 		$payment_gateways = WC()->payment_gateways->payment_gateways();
-		if (isset($payment_gateways[$this->gateway_id])) {
-			$gateway = $payment_gateways[$this->gateway_id];
+		if (isset($payment_gateways[$gateway_id])) {
+			$gateway = $payment_gateways[$gateway_id];
 			$configured_order_status = sanitize_text_field($gateway->get_option('order_status'));
 		} else {
 			wp_send_json_error(['message' => 'Payment gateway not found.']);
 			wp_die();
 		}
-
+		wc_clear_notices();
 		// Determine order status
 		if ($order->is_paid() || (isset($response_data['transaction_status']) && ($response_data['transaction_status'] == "success" || $response_data['transaction_status'] == "paid" || $response_data['transaction_status'] == "processing"))) {
 			$order->update_status($configured_order_status, 'Order marked as ' . $configured_order_status . ' by Unified.');
@@ -273,14 +382,22 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		}
 		
 		if ($order->has_status('failed') || (isset($response_data['transaction_status']) && $response_data['transaction_status'] == "failed")) {
+			wc_add_notice( 'Payment Failed: Transaction declined, please try another card.', 'error' );
 			$order->update_status('failed', 'Order marked as failed by Unified.');
 			wp_send_json_success(['status' => 'failed', 'redirect_url' => $payment_return_url]);
 			exit;
 		}
 		
 		if ($order->has_status('cancelled') || (isset($response_data['transaction_status']) && $response_data['transaction_status'] == "canceled")) {
+			if (WC()->cart) {
+				WC()->cart->empty_cart();
+				WC()->session->cleanup_sessions();
+				WC()->session->destroy_session();
+				WC()->session->set_customer_session_cookie( false );
+			}
+			wc_add_notice( 'Payment Canceled: The Payment method canceled your transaction.', 'error' );
 			$order->update_status('cancelled', 'Order marked as canceled by Unified.');
-			wp_send_json_success(['status' => 'cancelled', 'redirect_url' => $payment_return_url]);
+			wp_send_json_success(['status' => 'cancelled', 'redirect_url' => $order->get_cancel_order_url()]);
 			exit;
 		}
 
@@ -301,7 +418,14 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 	public function handle_popup_close()
 	{
-		check_ajax_referer('unified_payment', 'security');
+		// Sanitize and unslash the 'security' value
+		$security = isset($_POST['security']) ? sanitize_text_field(wp_unslash($_POST['security'])) : '';
+
+		// Check the nonce for security
+		if (empty($security) || !wp_verify_nonce($security, 'unified_payment')) {
+			wp_send_json_error(['message' => 'Nonce verification failed.']);
+			wp_die();
+		}
 
 		// Get the order ID from the request
 		$order_id = isset($_POST['order_id']) ? sanitize_text_field(wp_unslash($_POST['order_id'])) : null;
@@ -323,26 +447,24 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 		//Get uuid from WP
 		$payment_token = $order->get_meta('_unified_pay_id');
-
-		$public_key    = $order->get_meta('_unified_public_key');
-
+		
 		// Proceed only if the order status is 'pending'
-		if ($order->get_status() === 'pending' || $order->get_status() === 'processing' || $order->get_status() === 'canceled') {
-			// Call the Unified to update status
+		if ($order->get_status() === 'pending' || $order->get_status() === 'processing' || $order->get_status() === 'failed' || $order->get_status() === 'cancelled' || $order->get_status() === 'completed') {
+			// Call the Unified API to update status
 			$transactionStatusApiUrl = $this->get_api_url('/api/update-txn-status');
 			$response = wp_remote_post($transactionStatusApiUrl, [
 				'method'    => 'POST',
 				'body'      => wp_json_encode(['order_id' => $order_id, 'payment_token' => $payment_token]),
 				'headers'   => [
 					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $public_key,
+					'Authorization' => 'Bearer ' . $security,
 				],
 				'timeout'   => 15,
 			]);
 
 			// Check for errors in the API request
 			if (is_wp_error($response)) {
-				wp_send_json_error(['message' => 'Failed to connect to the Unified.']);
+				wp_send_json_error(['message' => 'Failed to connect to the Unified API.']);
 				wp_die();
 			}
 
@@ -350,26 +472,28 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			$response_body = wp_remote_retrieve_body($response);
 			$response_data = json_decode($response_body, true);
 
-			$log_message = 'Popup closed. Transaction status received from Unified.';
+			$log_message = 'Popup closed. Transaction status received from Unified API.';
 
 			wc_get_logger()->info($log_message, [
 				'source'  => 'unified-payment-gateway',
 				'context' => [
 					'order_id'           => $order_id,
-					'transaction_status' => $response_data['transaction_status'] ?? 'unknown'
+					'transaction_status' => $response_data['transaction_status'] ?? 'unknown',
+					'payment_status' => $response_data['payment_status'] ?? 'unknown'
 				],
 			]);
 
 			// Ensure the response contains the expected data
-			if (!isset($response_data['transaction_status'])) {
-				wp_send_json_error(['message' => 'Invalid response from Unified.']);
+			if (!isset($response_data['payment_status'])) {
+				wp_send_json_error(['message' => 'Invalid response from Unified API.']);
 				wp_die();
 			}
 
 			// Get the configured order status from the payment gateway settings
+			$gateway_id = 'unified';
 			$payment_gateways = WC()->payment_gateways->payment_gateways();
-			if (isset($payment_gateways[$this->gateway_id])) {
-				$gateway = $payment_gateways[$this->gateway_id];
+			if (isset($payment_gateways[$gateway_id])) {
+				$gateway = $payment_gateways[$gateway_id];
 				$configured_order_status = sanitize_text_field($gateway->get_option('order_status'));
 			} else {
 				wp_send_json_error(['message' => 'Payment gateway not found.']);
@@ -384,86 +508,62 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			}
 
 			$payment_return_url = $order->get_checkout_order_received_url();
-		
-			$txn_status = strtolower(trim($response_data['transaction_status']));
 			wc_clear_notices();
-			switch ($txn_status) {
-			    case 'success':
-			    case 'paid':
-			    case 'processing':
-				case 'uncaptured':
-			        try {
-			            wc_clear_notices();
-			            $order->update_status($configured_order_status, 'Order marked as ' . $configured_order_status . ' by Unified.');
-			            wp_send_json_success([
-			                'status' => $txn_status,
-			                'message' => 'Order status updated successfully.',
-			                'order_id' => $order_id,
-			                'redirect_url' => $payment_return_url
-			            ]);
-			        } catch (Exception $e) {
-			            wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
-			        }
-			        break;
+			if (isset($response_data['payment_status'])) {
+				// Handle transaction status from API
+				switch ($response_data['payment_status']) {
+					case 'success':
+					case 'paid':
+					case 'processing':
+						try {
+							$order->update_status($configured_order_status, 'Order marked as ' . $configured_order_status . ' by Unified.');
+							wp_send_json_success(['message' => 'Order status updated successfully.', 'order_id' => $order_id, 'redirect_url' => $payment_return_url]);
+						} catch (Exception $e) {
+							wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
+						}
+						break;
 
-			    case 'failed':
-			        try {
-			            wc_add_notice( 'Payment Failed: Transaction declined, please try another card.', 'error' );
-						$order->update_status('failed', 'Order marked as failed by Unified.');
-			            wp_send_json_success([
-			                'status' => $txn_status,
-			                'message' => 'Order status updated to failed.',
-			                'order_id' => $order_id,
-							'notices' => 'Payment Failed: The Payment method rejected your transaction. Please use another card.'
-			            ]);
-			        } catch (Exception $e) {
-			            wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
-			        }
-			        break;
+					case 'failed':
+						try {
+							wc_add_notice( 'Payment Failed: Transaction declined, please try another card.', 'error' );
+							$order->update_status('failed', 'Order marked as failed by Unified.');
+							wp_send_json_success(['message' => 'Order status updated to failed.', 'order_id' => $order_id, 'notices' => 'Payment Failed: We couldn\'t process your payment. Please try again or use another payment method.']);
+						} catch (Exception $e) {
+							wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
+						}
+						break;
 
-			    case 'canceled':
-			        try {
-			           wc_add_notice( 'Payment Canceled: The Payment method canceled your transaction.', 'error' );
-						$order->update_status('canceled', 'Order marked as canceled by Unified.');
-			            wp_send_json_success([
-			                'status' => $txn_status,
-			                'message' => 'Order status updated to canceled.',
-			                'order_id' => $order_id,
-			                'redirect_url' => esc_url($order->get_cancel_order_url()),
-					'notices' => 'Payment Canceled: The Payment method cancelled your transaction.'
-			            ]);
-			        } catch (Exception $e) {
-			            wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
-			        }
-			        break;
+					case 'canceled':
+						try {
+							if (WC()->cart) {
+								WC()->cart->empty_cart();
+								WC()->session->cleanup_sessions();
+								WC()->session->destroy_session();
+								WC()->session->set_customer_session_cookie( false );
+							}
+							wc_add_notice( 'Payment Canceled: The Payment method canceled your transaction.', 'error' );
+							$order->update_status('cancelled', 'Order marked as canceled by Unified.');
+							wp_send_json_success(['message' => 'Order status updated to canceled.', 'order_id' => $order_id, 'redirect_url' => $order->get_cancel_order_url(),'notices' => 'Payment Canceled: The payment was canceled. Please try again if you wish to complete your purchase.']);
+						} catch (Exception $e) {
+							wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
+						}
+						break;
 
-			    case 'pending':
-			        wc_clear_notices();
-			        wp_send_json_error([
-			            'code' => 'pending',
-			            'message' => 'Transaction still pending.',
-			            'order_id' => $order_id
-			        ]);
-			        break;
-
-			    default:
-			        wp_send_json_error(['message' => 'Unknown transaction status received: ' . $txn_status]);
+					default:
+						wp_send_json_error(['message' => 'Unknown Payment Status received.']);
+				}
 			}
-
 		} else {
 			// Skip API call if the order status is not 'pending'
-			wc_add_notice( 'Payment Cancelled.', 'error' );
-			wp_send_json_success(['message' => 'No payment update required as the order status is not pending.', 'order_id' => $order_id,'notices' => 'Payment Cancelled.']);
+			wp_send_json_success(['message' => 'No update required as the order status is not pending.', 'order_id' => $order_id]);
 		}
 
 		wp_die();
 	}
 
 	/**
-     * Add custom cron schedules.
-     */
-
-
+     * Add custom cron schedules.
+     */
 	public function unified_add_cron_interval($schedules)
 	{
 		$schedules['every_two_hours'] = array(
@@ -559,8 +659,8 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		$updated = false;
 		$statusSummary = [];
 
-		if (!empty($response_data['statuses'])) {
-			foreach ($response_data['statuses'] as $statusData) {
+		if (!empty($response_data['data'])) {
+			foreach ($response_data['data'] as $statusData) {
 				if (
 					isset($statusData['mode'], $statusData['public_key'], $statusData['status']) &&
 					!empty($statusData['status'])

@@ -1,68 +1,72 @@
-( function() {
-	const { registerPaymentMethod } = window.wc?.wcBlocksRegistry || {};
-	const { createElement } = window.wp?.element || {};
+console.log('unified-blocks.js loaded at', new Date().toISOString());
 
-	// Bail if registry isn't ready
-	if ( typeof registerPaymentMethod !== 'function' ) {
-		console.error( '[Unified] wcBlocksRegistry not available yet' );
-		return;
-	}
+/**
+ * Registers the Unified block payment method with WooCommerce Blocks.
+ */
+function registerUnifiedBlock() {
+    const { registerPaymentMethod } = window.wc?.wcBlocksRegistry || {};
+    const { createElement, RawHTML } = window.wp?.element || {};
 
-	// Load settings from WC or fallback to localized params
-	const settings =
-		window.wc?.wcSettings?.getPaymentMethodData?.('unified') ||
-		window.unified_params?.settings ||
-		{};
+    if (typeof registerPaymentMethod !== 'function') {
+        return;
+    }
 
-	console.log( '[Unified] settings:', settings );
+    // Use WooCommerce Blocks API to get the payment method settings
+    const settings = window.wc?.wcSettings?.getPaymentMethodData?.('unified') || {};
 
-	const methodConfig = {
-		name: settings.id || 'unified',
-		label: settings.title || 'Unified',
-		ariaLabel: settings.title || 'Unified',
-		content: createElement(
-			'div',
-			{ className: 'unified-description' },
-			settings.description || ''
-		),
-		edit: createElement(
-			'div',
-			{ className: 'unified-edit' },
-			settings.title || 'Unified'
-		),
-		canMakePayment: async () => true,
-		supports: {
-			features: settings.supports || [ 'products' ],
-		},
-		processPayment: async (order) => {
-			const loaderOverlay = document.querySelector('.processing-overlay');
-			if (loaderOverlay) loaderOverlay.style.display = 'flex';
+    if (!settings.title) return; // Exit if settings not yet ready
 
-			try {
-				const res = await fetch(unified_params.ajax_url, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-					body: new URLSearchParams({
-						action: 'unified_get_popup',
-						order_id: order.id,
-					}),
-					credentials: 'same-origin'
-				}).then(r => r.json());
+    const methodConfig = {
+        name: settings.id || 'unified',
+        label: settings.title,
+        ariaLabel: settings.title,
 
-				if (res.success) {
-					window.openPaymentPopup(res.data.order_data);
-				} else {
-					alert(res.data?.message || 'Something went wrong.');
-				}
-			} catch (err) {
-				alert('Failed to process payment.');
-			} finally {
-				if (loaderOverlay) loaderOverlay.style.display = 'none';
-			}
+        content: createElement(
+            'div',
+            { className: 'unified-description' },
+            createElement(RawHTML, {}, settings.description || '')
+        ),
 
-			// Important: Block checkout expects a response object
-			return { status: 'success', redirect: '' };
-		}
-	};
-	registerPaymentMethod(methodConfig);
-} )();
+        edit: createElement(
+            'div',
+            { className: 'unified-edit' },
+            settings.title
+        ),
+
+        canMakePayment: async () => settings.can_pay === true,
+
+        supports: {
+            features: settings.supports || ['products'],
+        },
+    };
+
+    registerPaymentMethod(methodConfig);
+    console.log('Unified block payment registered:', settings.title);
+}
+
+/**
+ * Retry registration until WooCommerce Blocks registry is ready.
+ */
+function ensureUnifiedRegistration() {
+    if (window.wc?.wcBlocksRegistry?.registerPaymentMethod) {
+        registerUnifiedBlock();
+    } else {
+        setTimeout(ensureUnifiedRegistration, 100); // Retry every 100ms
+    }
+}
+
+// Ensure registration after DOM content is loaded
+document.addEventListener('DOMContentLoaded', ensureUnifiedRegistration);
+
+/**
+ * Refresh block checkout payment methods after relevant events.
+ */
+function refreshBlockPaymentMethods() {
+    if (window.wc && window.wc.blocksCheckout) {
+        // WC Blocks 8.x+ API
+        document.body.dispatchEvent(new CustomEvent('wc-blocks_checkout_update_payment_methods'));
+    } else {
+        // Fallback for older versions
+        $(document.body).trigger('update_checkout');
+    }
+}

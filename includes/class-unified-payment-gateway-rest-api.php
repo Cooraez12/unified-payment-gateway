@@ -7,7 +7,6 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 {
 	private $logger;
 	private static $instance = null;
-	private $gateway_id;
 
 	public static function get_instance()
 	{
@@ -21,43 +20,41 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 	{
 		// Initialize the logger
 		$this->logger = wc_get_logger();
-		$this->gateway_id = UNIFIED_PLUGIN_ID;
+		
 
 		add_action('rest_api_init', function () {
-	        // Remove WordPress's default CORS headers
-	        remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+			// Remove WordPress's default CORS headers
+			remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
 
-	        // Add custom CORS headers
-	        add_filter('rest_pre_serve_request', function ($value) {
+			// Add custom CORS headers
+			add_filter('rest_pre_serve_request', function ($value) {
 
-	            // Allow specific origin (Unified dashboard)
-	            header('Access-Control-Allow-Origin: '.UNIFIED_BASE_URL);
-	            header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-	            header('Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, User-Agent, Accept');
-	            header('Access-Control-Allow-Credentials: true');
+			    header('Access-Control-Allow-Origin: '.UNIFIED_BASE_URL);
+			    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+			    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce, User-Agent, Accept');
+			    header('Access-Control-Allow-Credentials: true');
 
-	           // Safely get the request method
-				$request_method = filter_input(INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-				$request_method = $request_method ? strtoupper($request_method) : '';
+			   // Safely get the request method
+					$request_method = filter_input(INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+					$request_method = $request_method ? strtoupper($request_method) : '';
 
-				// Handle preflight request
-				if ($request_method === 'OPTIONS') {
-					status_header(200);
-					exit;
-				}
+					// Handle preflight request
+					if ($request_method === 'OPTIONS') {
+						status_header(200);
+						exit;
+					}
 
-	            return $value;
-	        }, 15);
-	    });
+			    return $value;
+			}, 15);
+		    });
 	}
 
 	public function unified_register_routes()
 	{
 		// Log incoming request with sanitized parameters
-		
 		add_action('rest_api_init', function () {
 			register_rest_route('unified/v1', '/data', array(
-				'methods' => 'POST',
+				'methods' => ['GET', 'POST'],
 				'callback' => array($this, 'unified_handle_api_request'),
 				'permission_callback' => '__return_true',
 			));
@@ -66,31 +63,62 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 
 	private function unified_verify_api_key($api_key)
 	{
-		$api_key = trim($api_key);
+	    $api_key = sanitize_text_field($api_key);
 
-		// Get Unified settings
-		$uni_fied_settings = get_option('woocommerce_unified_payment_gateway_accounts');
-		$unified_settings = get_option('woocommerce_unified_settings');
+	    // Retrieve plugin options
+	    $accounts_data = get_option('woocommerce_unified_payment_gateway_accounts');
+	    $general_settings = get_option('woocommerce_unified_settings');
 
-		if (!$uni_fied_settings || empty($uni_fied_settings)) {
-			return false; // No accounts available
-		}
+	    // $this->logger->info('Raw settings loaded', [
+	    //     'source' => 'unified-payment-gateway',
+	    //     'accounts_data' => $accounts_data,
+	    //     'general_settings' => $general_settings,
+	    // ]);
 
-		$accounts = $uni_fied_settings;
+	    if (empty($accounts_data)) {
+	        $this->logger->warning('No account data found', ['source' => 'unified-payment-gateway']);
+	        return false;
+	    }
 
-		$sandbox = isset($unified_settings['sandbox']) && $unified_settings['sandbox'] === 'yes';
+	    // If it's a single account array, wrap it inside an array for consistency
+	    if (isset($accounts_data['live_public_key']) || isset($accounts_data['sandbox_public_key'])) {
+	        $accounts_data = [ $accounts_data ];
+	    }
 
-		foreach ($accounts as $account) {
-			$public_key = $sandbox ? trim($account['sandbox_public_key']) : trim($account['live_public_key']);
+	    $sandbox = isset($general_settings['sandbox']) && $general_settings['sandbox'] === 'yes';
 
-			// Use a secure hash comparison
-			if (!empty($public_key) && hash_equals($public_key, $api_key)) {
-				return true;
-			}
-		}
+	    foreach ($accounts_data as $account_id => $account) {
+	        // Ensure valid array
+	        if (!is_array($account)) {
+	            $this->logger->warning('Skipping invalid account entry', [
+	                'source' => 'unified-payment-gateway',
+	                'account_id' => $account_id,
+	                'account_value' => $account
+	            ]);
+	            continue;
+	        }
 
-		return false;
+	        $public_key = $sandbox
+	            ? sanitize_text_field($account['sandbox_public_key'] ?? '')
+	            : sanitize_text_field($account['live_public_key'] ?? '');
+
+	        $this->logger->info('Checking public key :: ' . $public_key, [
+	            'source' => 'unified-payment-gateway',
+	            'sandbox' => $sandbox,
+	        ]);
+
+	        if (!empty($public_key) && hash_equals($public_key, $api_key)) {
+	            $this->logger->info('Keys matched successfully', [
+	                'source' => 'unified-payment-gateway',
+	                'account_id' => $account_id,
+	            ]);
+	            return true;
+	        }
+	    }
+
+	    return false;
 	}
+
 	/**
 	 * Handles incoming Unified API requests to update order status.
 	 *
@@ -99,134 +127,242 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 	 */
 	public function unified_handle_api_request(WP_REST_Request $request)
 	{
+		$method = $request->get_method();
 		$parameters = $request->get_json_params();
-		
-		// Sanitize incoming data to prevent security vulnerabilities.
-		$api_key = isset($parameters['nonce']) ? sanitize_text_field($parameters['nonce']) : '';
-		$order_id = isset($parameters['order_id']) ? intval($parameters['order_id']) : 0;
-		$api_order_status = isset($parameters['order_status']) ? sanitize_text_field($parameters['order_status']) : '';
-		$pay_id = isset($parameters['pay_id']) ? sanitize_text_field($parameters['pay_id']) : '';
-
-		$this->logger->info('Unified API Request Received.', [
-		    'source'  => 'unified-payment-gateway',
-		    'context' => [
-		        'response_payload' => $parameters
-		    ],
+		$this->logger->info('Parameter API Request : ', [
+			'source' => 'unified-payment-gateway',
+			'api_data' => $parameters
 		]);
 
-		// Validate API key first to secure the endpoint.
-		if (!$this->unified_verify_api_key(base64_decode($api_key))) {
-			$this->logger->error('Unauthorized access attempt due to invalid API key.', array('source' => 'unified-payment-gateway'));
-			return new WP_REST_Response(['error' => 'Unauthorized'], 401);
-		}
+		// Sanitize incoming data
+		$api_key_raw       = $parameters['nonce'] ?? $_GET['nonce'];
+		$api_key           = sanitize_text_field($api_key_raw);
+		$order_id          = isset($parameters['order_id']) ? intval($parameters['order_id']) : $_GET['order_id'];
+		$api_order_status  = sanitize_text_field($parameters['order_status'] ?? '');
+		$pay_id            = sanitize_text_field($parameters['pay_id'] ?? '');
 
-		// Validate order ID.
+		// Base log context for easier tracing
+		$log_context = [
+			'source' => 'unified-payment-gateway',
+			'order_id' => $order_id,
+			'api_status' => $api_order_status,
+			'pay_id' => $pay_id,
+			'api_key' => $api_key
+		];
+
+		$this->logger->info('API Request Received', $log_context);
+
 		if ($order_id <= 0) {
-			$this->logger->error('Invalid order ID received: ' . $order_id, array('source' => 'unified-payment-gateway'));
-			return new WP_REST_Response(['error' => 'Invalid data (Order ID missing or invalid)'], 400);
+			$this->logger->error('Invalid order ID', $log_context);
+
+			return new WP_REST_Response([
+				'success' => false,
+				'error_code' => 'INVALID_ORDER_ID',
+				'message' => 'Order ID is missing or invalid.'
+			], 400);
 		}
 
-		// Retrieve the order object.
 		$order = wc_get_order($order_id);
+
 		if (!$order) {
-			$this->logger->error('Order not found for ID: ' . $order_id, array('source' => 'unified-payment-gateway'));
-			return new WP_REST_Response(['error' => 'Order not found'], 404);
+			$this->logger->error('Order not found', $log_context);
+
+			return new WP_REST_Response([
+				'success' => false,
+				'error_code' => 'ORDER_NOT_FOUND',
+				'message' => 'Order not found in WooCommerce.'
+			], 404);
 		}
 
-		// Retrieve the stored payment token (pay_id) from the order meta.
+		if ($method === 'GET') {
+			// Read query parameters
+			$api_order_status = sanitize_text_field($request->get_param('order_status') ?? '');
+			$pay_id           = sanitize_text_field($request->get_param('pay_id') ?? '');
+
+			$settings = get_option('woocommerce_unified_settings', []);
+			$success_status = isset($settings['order_status']) ? sanitize_text_field($settings['order_status']) : 'processing';
+
+			// Map API status to WooCommerce status
+			switch ($api_order_status) {
+				case 'completed':
+					$target_order_status = $success_status;
+					break;
+				case 'failed':
+					$target_order_status = 'failed';
+					break;
+				case 'expired':
+					$target_order_status = 'expired';
+					break;
+				case 'cancelled':
+					$target_order_status = 'cancelled';
+					break;
+				default:
+					$target_order_status = null;
+			}
+
+			$current_status = $order->get_status();
+
+			// Update order if needed
+			if ($target_order_status && $current_status !== $target_order_status) {
+				try {
+					$order->update_status($target_order_status, "Updated via Unified");
+
+					if ($pay_id) {
+						$order->update_meta_data('_unified_pay_id', $pay_id);
+						$order->save_meta_data();
+					}
+
+					$this->logger->info('GET: Order updated before redirect', [
+						...$log_context,
+						'from' => $current_status,
+						'to' => $target_order_status,
+						'pay_id' => $pay_id
+					]);
+
+				} catch (\Exception $e) {
+					$this->logger->error('GET: Order update failed', [
+						...$log_context,
+						'error' => $e->getMessage()
+					]);
+				}
+			}
+
+			// --- Unified notice and redirect handling ---
+			$message_map = [
+				'failed'    => 'Payment failed. Please try again.',
+				'cancelled' => 'Payment was cancelled.',
+				'expired'   => 'Payment link has expired.'
+			];
+
+			if (in_array($target_order_status, ['failed', 'cancelled', 'expired'])) {
+				$notice = $message_map[$target_order_status] ?? 'Payment could not be completed.';
+
+				// Classic checkout: wc_add_notice
+				if (function_exists('wc_add_notice')) {
+					wc_add_notice($notice, 'error');
+				}
+
+				// Block checkout / fallback: session
+				if (function_exists('WC') && WC()->session) {
+					WC()->session->set('unified_error', $target_order_status);
+					WC()->session->save_data(); // ✅ ensure notice/session is saved before redirect
+				}
+
+				// Redirect to checkout page
+				$return_url = wc_get_checkout_url();
+			} else {
+				// Successful payment: redirect to thank-you page
+				$return_url = $order->get_checkout_order_received_url();
+			}
+
+			wp_safe_redirect($return_url);
+			exit;
+		}
+		
+		if (empty($api_key) || !$this->unified_verify_api_key(base64_decode($api_key))) {
+			$this->logger->error('Invalid API key', $log_context);
+
+			return new WP_REST_Response([
+				'success' => false,
+				'error_code' => 'INVALID_API_KEY',
+				'message' => 'Authentication failed. Please check API key configuration.'
+			], 401);
+		}
+
 		$stored_payment_token = $order->get_meta('_unified_pay_id');
 
-		// Crucial check: Ensure the received pay_id matches the one stored with the order.
-		// This prevents unauthorized updates to orders by supplying a valid order_id but a different pay_id.
+
 		if (!empty($stored_payment_token) && $stored_payment_token !== $pay_id) {
-			$this->logger->error('Pay ID mismatch for order ' . $order_id . '. Received: ' . $pay_id . ', Stored: ' . $stored_payment_token, array('source' => 'unified-payment-gateway'));
-			return new WP_REST_Response(['error' => 'Pay ID mismatch'], 400);
+			$this->logger->error('Pay ID mismatch', [
+				...$log_context,
+				'stored_pay_id' => $stored_payment_token,
+				'pay_id' => $pay_id
+			]);
+
+			return new WP_REST_Response([
+				'success' => false,
+				'error_code' => 'PAY_ID_MISMATCH',
+				'message' => 'Payment verification failed. Pay ID does not match.'
+			], 400);
 		}
 
-		// --- Idempotency and Order Status Update Logic ---
-		$current_order_status = $order->get_status();
-		$target_order_status = $current_order_status; // Initialize with current status
-		//BeaverTech Code Change start
-		if ($api_order_status === 'completed' || $api_order_status === 'cancelled' || $api_order_status === 'failed' || $api_order_status === 'expired') {
-			// Check if the current order status allows for a transition to 'completed' or 'processing'.
-			if (in_array($current_order_status, ['pending', 'failed'])) {
-				// Get the configured order status from the payment gateway settings for successful payments.
-				$payment_gateways = WC()->payment_gateways->payment_gateways();
+		$settings = get_option('woocommerce_unified_settings', []);
+		$success_status = isset($settings['order_status']) ? sanitize_text_field($settings['order_status']) : 'processing';
 
-				if (isset($payment_gateways[$this->gateway_id])) {
-					$gateway = $payment_gateways[$this->gateway_id];
-					// Default to 'processing' if not explicitly set in gateway options.
-					if ($api_order_status === 'completed'){
-						$target_order_status = sanitize_text_field($gateway->get_option('order_status', 'processing'));
-					}else{
-						$target_order_status = $api_order_status;
-					}
-				} else {
-					$this->logger->error('Unified payment gateway settings not found.', array('source' => 'unified-payment-gateway'));
-					return new WP_REST_Response(['error' => 'Payment gateway configuration error'], 500);
-				}
+		switch ($api_order_status) {
+			case 'completed':
+				$target_order_status = $success_status; // use admin-selected
+				break;
 
-				// Validate that the configured target status is a recognized WooCommerce status.
-				$allowed_statuses = wc_get_order_statuses();
-				if (!array_key_exists('wc-' . $target_order_status, $allowed_statuses)) {
-					$this->logger->error('Invalid order status configured in Unified gateway settings: ' . $target_order_status, array('source' => 'unified-payment-gateway'));
-					return new WP_REST_Response(['error' => 'Invalid configured order status'], 400);
-				}
-			} else {
-				// If the order is already in a completed or processing state (not pending/failed),
-				// it means this is a duplicate 'completed' webhook. Log and respond successfully.
-				$this->logger->info('Order ' . esc_html($order_id) . ' is already in "' . esc_html($current_order_status) . '". No status change performed for duplicate "completed" webhook.', array('source' => 'unified-payment-gateway'));
+			case 'failed':
+				$target_order_status = 'failed';
+				break;
 
-				// Still empty the cart if it's a successful payment, even if status hasn't changed.
-				if (WC()->cart) {
-					WC()->cart->empty_cart();
-				}
-				$payment_return_url = $order->get_checkout_order_received_url();
-				return new WP_REST_Response(['success' => true, 'message' => 'Order status already updated or no change required', 'payment_return_url' => $payment_return_url, 'order_status'    => $order->get_status()], 200);
-			}
-		} else {
-			// If the API status is not 'completed', or if your system needs to handle other statuses
-			// (e.g., 'failed', 'refunded'), you would add logic here.
-			// For now, if it's not a 'completed' status, we might not want to change the status,
-			// or we might set $target_order_status based on $api_order_status if those are mapped.
-			// This example assumes 'completed' is the primary status to act upon.
-			$this->logger->info('Unified API requested status "' . esc_html($api_order_status) . '" for order ' . esc_html($order_id) . '. Current status is "' . esc_html($current_order_status) . '". No specific action for this API status defined.', array('source' => 'unified-payment-gateway'));
+			case 'expired':
+				$target_order_status = 'expired'; // must register this status
+				break;
 
-			// If no action is needed for this specific API status, we still return success to acknowledge receipt.
-			$payment_return_url = $order->get_checkout_order_received_url();
-			return new WP_REST_Response(['success' => true, 'message' => 'Request received, no status change performed based on API status', 'payment_return_url' => $payment_return_url, 'order_status'    => $order->get_status()], 200);
+			case 'cancelled':
+				$target_order_status = 'cancelled';
+				break;
+
+			default:
+				$target_order_status = null;
 		}
-		//BeaverTech Code Change end
-		// Only attempt to update the order status if the target status is different from the current status.
-		// WooCommerce's internal `update_status` also has idempotency, but this explicit check is clearer.
-		if ('wc-' . $target_order_status !== $current_order_status) {
-			$updated = $order->update_status(
+
+		if (!$target_order_status) {
+			$this->logger->warning('Unknown API status', $log_context);
+
+			return new WP_REST_Response([
+				'success' => true,
+				'error_code' => 'UNKNOWN_STATUS',
+				'message' => 'Status received but no action taken.'
+			], 200);
+		}
+
+		$current_status = $order->get_status();
+
+		if ($current_status === $target_order_status) {
+			$this->logger->info('Order already in target status', $log_context);
+
+			return new WP_REST_Response([
+				'success' => true,
+				'message' => 'Order already in correct status.',
+				'status' => $current_status,
+				'payment_return_url' => $order->get_checkout_order_received_url()
+			], 200);
+		}
+
+		try {
+			$order->update_status(
 				$target_order_status,
-				sprintf(
-					// translators: %1$s: current order status, %2$s: target order status
-					__('Order status updated via Unified API from %1$s to %2$s', 'unified-payment-gateway'),
-					$current_order_status, // This will map to %1$s
-					$target_order_status   // This will map to %2$s
-				)
+				"Updated via Unified API ({$api_order_status})"
 			);
 
-			if ($updated) {
-				$this->logger->info('Order status updated successfully for order ' . esc_html($order_id) . ' from "' . esc_html($current_order_status) . '" to "' . esc_html($target_order_status) . '".', array('source' => 'unified-payment-gateway'));
-			} else {
-				$this->logger->error('Failed to update order status for order ' . esc_html($order_id) . ' from "' . esc_html($current_order_status) . '" to "' . esc_html($target_order_status) . '".', array('source' => 'unified-payment-gateway'));
-				return new WP_REST_Response(['error' => 'Failed to update order status'], 500);
-			}
-		} else {
-			$this->logger->info('Order ' . esc_html($order_id) . ' is already in the target status "' . esc_html($target_order_status) . '". No update performed.', array('source' => 'unified-payment-gateway'));
+			$this->logger->info('Order updated successfully', [
+				...$log_context,
+				'from' => $current_status,
+				'to' => $target_order_status
+			]);
+
+		} catch (\Exception $e) {
+			$this->logger->error('Order update failed', [
+				...$log_context,
+				'error' => $e->getMessage()
+			]);
+
+			return new WP_REST_Response([
+				'success' => false,
+				'error_code' => 'UPDATE_FAILED',
+				'message' => 'Failed to update order. Please check WooCommerce logs.'
+			], 500);
 		}
 
-		// Always empty the cart after a successful payment webhook has been processed.
-		if (WC()->cart) {
-			WC()->cart->empty_cart();
-		}
-
-		// Return a successful response to Unified API.
-		$payment_return_url = $order->get_checkout_order_received_url();
-		return new WP_REST_Response(['success' => true, 'message' => 'Order status processed successfully', 'payment_return_url' => $payment_return_url, 'order_status'    => $order->get_status()], 200);
+		return new WP_REST_Response([
+			'success' => true,
+			'status' => $target_order_status,
+			'message' => "Order status mapped: {$api_order_status} → {$target_order_status}",
+			'payment_return_url' => $order->get_checkout_order_received_url()
+		], 200);
 	}
 }

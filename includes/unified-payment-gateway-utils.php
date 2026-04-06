@@ -1,5 +1,5 @@
 <?php
-
+if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 /**
  * Check the environment for compatibility issues.
  *
@@ -7,11 +7,11 @@
  */
 function unified_check_system_requirements()
 {
-	if (version_compare(phpversion(), UNIFIED_PAYMENT_GATEWAY_MIN_PHP_VER, '<')) {
+	if (version_compare(phpversion(), BYTENFT_PAYMENT_GATEWAY_MIN_PHP_VER, '<')) {
 		return sprintf(
 			// translators: %1$s is the minimum required PHP version, %2$s is the current PHP version
 			__('The Unified Payment Gateway plugin requires PHP version %1$s or greater. You are running %2$s.', 'unified-payment-gateway'),
-			UNIFIED_PAYMENT_GATEWAY_MIN_PHP_VER,
+			BYTENFT_PAYMENT_GATEWAY_MIN_PHP_VER,
 			phpversion()
 		);
 	}
@@ -21,21 +21,21 @@ function unified_check_system_requirements()
 	$wc_plugin_version = defined('WC_VERSION') ? WC_VERSION : null;
 
 	// Check if the WooCommerce database version is outdated
-	if (!$wc_db_version || version_compare($wc_db_version, UNIFIED_PAYMENT_GATEWAY_MIN_WC_VER, '<')) {
+	if (!$wc_db_version || version_compare($wc_db_version, BYTENFT_PAYMENT_GATEWAY_MIN_WC_VER, '<')) {
 		return sprintf(
 			// translators: %1$s is the minimum required WooCommerce database version, %2$s is the current WooCommerce database version (or "undefined" if not available)
 			__('The Unified Payment Gateway plugin requires WooCommerce database version %1$s or greater. You are running %2$s.', 'unified-payment-gateway'),
-			UNIFIED_PAYMENT_GATEWAY_MIN_WC_VER,
+			BYTENFT_PAYMENT_GATEWAY_MIN_WC_VER,
 			$wc_db_version ? $wc_db_version : __('undefined', 'unified-payment-gateway')
 		);
 	}
 
 	// Check if WooCommerce plugin version is outdated
-	if (!$wc_plugin_version || version_compare($wc_plugin_version, UNIFIED_PAYMENT_GATEWAY_MIN_WC_VER, '<')) {
+	if (!$wc_plugin_version || version_compare($wc_plugin_version, BYTENFT_PAYMENT_GATEWAY_MIN_WC_VER, '<')) {
 		return sprintf(
 			// translators: %1$s is the minimum required WooCommerce plugin version, %2$s is the current WooCommerce plugin version (or "undefined" if not available)
 			__('The Unified Payment Gateway plugin requires WooCommerce plugin version %1$s or greater. You are running %2$s.', 'unified-payment-gateway'),
-			UNIFIED_PAYMENT_GATEWAY_MIN_WC_VER,
+			BYTENFT_PAYMENT_GATEWAY_MIN_WC_VER,
 			$wc_plugin_version ? $wc_plugin_version : __('undefined', 'unified-payment-gateway')
 		);
 	}
@@ -60,7 +60,7 @@ function unified_activation_check()
 {
 	$environment_warning = unified_check_system_requirements();
 	if ($environment_warning) {
-		deactivate_plugins(plugin_basename(UNIFIED_PAYMENT_GATEWAY_FILE));
+		deactivate_plugins(plugin_basename(BYTENFT_PAYMENT_GATEWAY_FILE));
 		wp_die(esc_html($environment_warning)); // Escape the output before calling wp_die
 	}
 }
