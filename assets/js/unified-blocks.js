@@ -30,15 +30,39 @@
 			{ className: 'unified-edit' },
 			settings.title || 'Unified'
 		),
-		canMakePayment: async () => {
-			console.log( '[Unified] canMakePayment called' );
-			return true;
-		},
+		canMakePayment: async () => true,
 		supports: {
 			features: settings.supports || [ 'products' ],
 		},
-	};
+		processPayment: async (order) => {
+			const loaderOverlay = document.querySelector('.processing-overlay');
+			if (loaderOverlay) loaderOverlay.style.display = 'flex';
 
-	console.log( '[Unified] Registering payment method:', methodConfig );
-	registerPaymentMethod( methodConfig );
+			try {
+				const res = await fetch(unified_params.ajax_url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+					body: new URLSearchParams({
+						action: 'unified_get_popup',
+						order_id: order.id,
+					}),
+					credentials: 'same-origin'
+				}).then(r => r.json());
+
+				if (res.success) {
+					window.openPaymentPopup(res.data.order_data);
+				} else {
+					alert(res.data?.message || 'Something went wrong.');
+				}
+			} catch (err) {
+				alert('Failed to process payment.');
+			} finally {
+				if (loaderOverlay) loaderOverlay.style.display = 'none';
+			}
+
+			// Important: Block checkout expects a response object
+			return { status: 'success', redirect: '' };
+		}
+	};
+	registerPaymentMethod(methodConfig);
 } )();

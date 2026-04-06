@@ -74,7 +74,37 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		add_filter('woocommerce_admin_order_preview_line_items', [$this, 'unified_add_custom_label_to_order_row'], 10, 2);
 
 		add_filter('woocommerce_available_payment_gateways', [$this, 'hide_custom_payment_gateway_conditionally']);
+
+		add_action('wp_footer', [$this,'render_payment_popup']);
+
+		add_action('wp_ajax_unified_process_payment', [$this, 'ajax_process_payment']);
+		add_action('wp_ajax_nopriv_unified_process_payment', [$this, 'ajax_process_payment']);
 	}
+
+	/**
+	 * AJAX handler to return popup data
+	 */
+	public function ajax_process_payment() {
+		$order_id = $_POST['order_id'] ?? null;
+
+		if (!$order_id) {
+			wp_send_json_error(['message' => 'No order ID provided.']);
+		}
+
+		$order = wc_get_order($order_id);
+		if (!$order) {
+			wp_send_json_error(['message' => 'Invalid order.']);
+		}
+
+		$result = $this->process_payment($order_id);
+
+		if ($result['result'] === 'success') {
+			wp_send_json_success($result);
+		} else {
+			wp_send_json_error(['message' => $result['message'] ?? 'Payment failed']);
+		}
+	}
+
 
 	private function get_api_url($endpoint)
 	{
@@ -465,474 +495,168 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 <?php return ob_get_clean();
 	}
 
-	/**
-	 * Process the payment and return the result.
-	 *
-	 * @param int $order_id Order ID.
-	 * @return array
-	 */
-	public function process_payment($order_id, $used_accounts = [])
+	public function process_payment($order_id)
 	{
 		global $wpdb;
 		$logger_context = ['source' => 'unified-payment-gateway'];
 
-		// Retrieve client IP
-		$ip_address = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '';
-		if (!filter_var($ip_address, FILTER_VALIDATE_IP)) {
-			$ip_address = 'invalid';
-		}
-
-		// **Rate Limiting**
-		$window_size = 30; // 30 seconds
-		$max_requests = 100;
-		$timestamp_key = "rate_limit_{$ip_address}_timestamps";
-		$request_timestamps = get_transient($timestamp_key) ?: [];
-
-		// Remove old timestamps
-		$timestamp = time();
-		$request_timestamps = array_filter($request_timestamps, fn($ts) => $timestamp - $ts <= $window_size);
-
-		if (count($request_timestamps) >= $max_requests) {
-			wc_get_logger()->warning("Rate limit exceeded for IP: {$ip_address}", $logger_context);
-			wc_add_notice(__('Too many requests. Please try again later.', 'unified-payment-gateway'), 'error');
-			return ['result' => 'fail'];
-		}
-
-		// Add the current timestamp
-		$request_timestamps[] = $timestamp;
-		set_transient($timestamp_key, $request_timestamps, $window_size);
-
-		// **Retrieve Order**
+		// --------------------
+		// Load order
+		// --------------------
 		$order = wc_get_order($order_id);
-		
 		if (!$order) {
 			wc_get_logger()->error("Invalid order ID: {$order_id}", $logger_context);
 			wc_add_notice(__('Invalid order.', 'unified-payment-gateway'), 'error');
 			return ['result' => 'fail'];
 		}
-		//BeaverTech Code Change start
-		$current_order_status = $order->get_status();
-		if ($current_order_status === 'completed') {
-			if (WC()->cart) {
-				WC()->cart->empty_cart();
-				WC()->session->cleanup_sessions();
-				WC()->session->destroy_session();
-				WC()->session->set_customer_session_cookie( false );
 
-			}
-
-			// Return a successful response to Unified API.
-			$payment_return_url = esc_url($order->get_checkout_order_received_url());
+		// --------------------
+		// Already paid or completed orders
+		// --------------------
+		if ($order->has_status(['processing', 'completed'])) {
 			return [
-				'result'       => 'success',
-				'order_id'     => $order->get_id(),
-				'payment_status'     => 'success',
-				'redirect_url' => esc_url($order->get_checkout_order_received_url()),
+				'result'   => 'success',
+				'redirect' => $order->get_checkout_order_received_url(),
 			];
-		}elseif($current_order_status === 'cancelled'){
-			if (WC()->cart) {
-				WC()->cart->empty_cart();
-				WC()->session->cleanup_sessions();
-				WC()->session->destroy_session();
-				WC()->session->set_customer_session_cookie( false );
-			}
-			
-			return [
-				'result'       => 'success',
-				'order_id'     => $order->get_id(),
-				'payment_status'     => 'success',
-				'redirect_url' => esc_url($order->get_cancel_order_url()),
-			];
-			
 		}
-		//BeaverTech Code Change end
 
-		// **Sandbox Mode Handling**
-		if ($this->sandbox) {
-			$test_note = __('This is a test order processed in sandbox mode.', 'unified-payment-gateway');
-			$existing_notes = get_comments(['post_id' => $order->get_id(), 'type' => 'order_note', 'approve' => 'approve']);
-
-			if (!array_filter($existing_notes, fn($note) => trim($note->comment_content) === trim($test_note))) {
-				$order->update_meta_data('_is_test_order', true);
-				$order->add_order_note($test_note);
-			}
-			wc_get_logger()->info("Sandbox mode: test order flag set for Order ID: {$order_id}", $logger_context);
-		}
-		$last_failed_account = null; // Track the last account that reached the limit
-		$previous_account = null;
-		// **Start Payment Process**
-		while (true) {
-			$account = $this->get_next_available_account($used_accounts);
-
-			if (empty($account) || !is_array($account)) {
-				// **Ensure email is sent to the last failed account**
-				if ($last_failed_account) {
-					wc_get_logger()->info("Sending notification to account '{$last_failed_account['title']}' due to no available alternatives.", $logger_context);
-					// Only send switch email if more than one valid account exists
-					if ($this->has_multiple_accounts()) {
-						$this->send_account_switch_email($last_failed_account, $account);
-					} else {
-						wc_get_logger()->info('Skipping account switch email because only one valid account is configured.', $logger_context);
-					}
-				}
-				wc_add_notice(__('No available payment accounts.', 'unified-payment-gateway'), 'error');
-				return ['result' => 'fail'];
-			}
-
-			$public_key = $this->sandbox ? $account['sandbox_public_key'] : $account['live_public_key'];
-			$secret_key = $this->sandbox ? $account['sandbox_secret_key'] : $account['live_secret_key'];
-
-			$accStatusApiUrl = $this->get_api_url('/api/check-merchant-status');
-			$merchant_status_data = [
-			    'is_sandbox'     => $this->sandbox,
-			    'amount'         => $order->get_total(),
-			    'api_public_key' => $public_key,
-				'api_secret_key' => $secret_key,
-			];
-
-			// Use cache for status check
-			$unified_cache_key = 'merchant_status_' . md5($public_key);
-			$merchant_status_response = $this->get_cached_api_response($accStatusApiUrl, $merchant_status_data, $unified_cache_key);
-
-			if (
-			    !is_array($merchant_status_response) ||
-			    !isset($merchant_status_response['status']) ||
-			    $merchant_status_response['status'] !== 'success'
-			) {
-			    wc_get_logger()->warning("Account '{$account['title']}' failed merchant status check.", [
-			        'source'  => 'unified-payment-gateway',
-			        'context' => [
-			            'order_id'      => $order_id,
-			            'account_title' => $account['title'] ?? 'unknown',
-			            'response'      => $merchant_status_response,
-			        ],
-			    ]);
-
-			    if (!empty($lock_key)) {
-			        $this->release_lock($lock_key);
-			    }
-
-			    // 👇 THIS LINE PREVENTS INFINITE LOOP
-				$used_accounts[] = $this->sandbox ? $account['sandbox_public_key'] : $account['live_public_key'];
-
-			    continue; // Try next account
-			}
-
-
-			/* ========================== END ========================== */
-
-			$lock_key = $account['lock_key'] ?? null;
-
-			// Add order note mentioning account name
-			$order->add_order_note(__('Processing Payment Via: ', 'unified-payment-gateway') . $account['title']);
-
-			// **Prepare API Data**
-			$public_key = $this->sandbox ? $account['sandbox_public_key'] : $account['live_public_key'];
-			$secret_key = $this->sandbox ? $account['sandbox_secret_key'] : $account['live_secret_key'];
-			$data = $this->unified_prepare_payment_data($order, $public_key, $secret_key);
-
-			// **Check Transaction Limit**
-			$transactionLimitApiUrl = $this->get_api_url('/api/dailylimit');
-			$transaction_limit_response = wp_remote_post($transactionLimitApiUrl, [
-				'method' => 'POST',
-				'timeout' => 30,
-				'body' => $data,
-				'headers' => [
-					'Content-Type' => 'application/x-www-form-urlencoded',
-					'Authorization' => 'Bearer ' . sanitize_text_field($data['api_public_key']),
-				],
-				'sslverify' => true,
-			]);
-
-			$transaction_limit_data = json_decode(wp_remote_retrieve_body($transaction_limit_response), true);
-
-			// **Handle Account Limit Error**
-			if (isset($transaction_limit_data['status']) && $transaction_limit_data['status'] === 'error') {
-				$error_message = sanitize_text_field($transaction_limit_data['message']);
-				wc_get_logger()->warning("['{$account['title']}'] exceeded daily transaction limit: $error_message", $logger_context);
-
-				if (!empty($lock_key)) {
-					$this->release_lock($lock_key);
-				}
-
-				$last_failed_account = $account;
-				// Switch to next available account
-				$used_accounts[] = $account['title'];
-				$new_account = $this->get_next_available_account($used_accounts);
-
-				// **Send Email Notification **
-				if ($new_account) {
-					wc_get_logger()->info("Switched to fallback account '{$new_account['title']}' after '{$account['title']}' limit reached.", $logger_context);
-
-					// Send email only to the previously failed account
-					if ($previous_account) {
-						//$this->send_account_switch_email($previous_account, $account);
-					}
-
-					$previous_account = $account;
-					continue; // Retry with the new account
-				} else {
-					// **No available accounts left, send email to the last failed account**
-					if ($last_failed_account) {
-						// Only send switch email if more than one valid account exists
-						if ($this->has_multiple_accounts()) {
-							$this->send_account_switch_email($last_failed_account, $account);
-						} else {
-							wc_get_logger()->info('Skipping account switch email because only one valid account is configured.', $logger_context);
-						}
-					}
-					wc_add_notice(__('All accounts have reached their transaction limit.', 'unified-payment-gateway'), 'error');
-					return ['result' => 'fail'];
-				}
-			}
-
-			// **Proceed with Payment**
-			wc_get_logger()->info("Sending payment request using account '{$account['title']}'", $logger_context);
-			$apiPath = '/api/request-payment';
-			$url = esc_url($this->base_url . $apiPath);
-
-			$order->update_meta_data('_order_origin', 'unified_payment_gateway');
+		// --------------------
+		// Sandbox marker
+		// --------------------
+		if ($this->sandbox && !$order->get_meta('_is_test_order')) {
+			$order->update_meta_data('_is_test_order', true);
+			$order->add_order_note(__('Sandbox mode order.', 'unified-payment-gateway'));
 			$order->save();
-			
-			$response = wp_remote_post($url, [
-				'method' => 'POST',
-				'timeout' => 30,
-				'body' => $data,
-				'headers' => [
-					'Content-Type' => 'application/x-www-form-urlencoded',
-					'Authorization' => 'Bearer ' . sanitize_text_field($data['api_public_key']),
-				],
-				'sslverify' => true,
-			]);
-
-			wc_get_logger()->info(
-				'Payment raw response (type=' . gettype($response) . '): ' . print_r($response, true),
-				$logger_context
-			);
-
-			// **Handle Response**
-			if (is_wp_error($response)) {
-				wc_get_logger()->error("HTTP error during payment request: {$response->get_error_message()}", $logger_context);
-				if (!empty($lock_key)) {
-					$this->release_lock($lock_key);
-				}
-				wc_add_notice(__('Payment error: Unable to process.', 'unified-payment-gateway'), 'error');
-				return ['result' => 'fail'];
-			}
-
-			$response_data = json_decode(wp_remote_retrieve_body($response), true);
-
-			// wc_get_logger()->info(
-			// 	'Payment raw response (type=' . gettype($response_data) . '): ' . print_r($response_data, true),
-			// 	$logger_context
-			// );
-
-			// Ensure sensitive data is sanitized or omitted if necessary.
-			$response_data_str = is_array($response_data) ? json_encode($response_data) : (string)$response_data;
-
-			// Log the response data.
-			wc_get_logger()->info('Payment raw response: ' . $response_data_str, $logger_context);
-
-			//BeaverTech Code Change start
-			if (!empty($response_data['status']) && $response_data['status'] === 'success' && !empty($response_data['data']['payment_link'])) {
-
-				if($response_data['data']['payment_status'] == 'success'){
-					$current_order_status = $order->get_status();
-					$target_order_status = $response_data['data']['payment_status'];
-
-					// **Update Order Status**
-					$order->update_status('processing', 'Order marked as processing by Unified.');
-
-					if (WC()->cart) {
-						WC()->cart->empty_cart();
-					}
-				
-					return [
-						'result'       => 'success',
-						'order_id'     => $order->get_id(),
-						'payment_status'     => $response_data['data']['payment_status'],
-						'redirect_url' => esc_url($order->get_checkout_order_received_url()),
-					];
-				}
-				//BeaverTech Code Change end
-				if ($last_failed_account) {
-					wc_get_logger()->info("Sending email before returning success to: '{$last_failed_account['title']}'", ['source' => 'unified-payment-gateway']);
-					// Only send switch email if more than one valid account exists
-					if ($this->has_multiple_accounts()) {
-						$this->send_account_switch_email($last_failed_account, $account);
-					} else {
-						wc_get_logger()->info('Skipping account switch email because only one valid account is configured.', ['source' => 'unified-payment-gateway']);
-					}
-				}
-				//$last_successful_account = $account;
-				// Save pay_id to order meta
-				$pay_id = $response_data['data']['pay_id'] ?? '';
-				if (!empty($pay_id)) {
-					$order->update_meta_data('_unified_pay_id', $pay_id);
-					$order->update_meta_data('_unified_public_key', $public_key);
-					$order->update_meta_data('_unified_secret_key', $secret_key);
-					$order->save();
-				}
-
-				$table_name = $wpdb->prefix . 'order_payment_link';
-
-				// Add simple cache to avoid hitting DB on every request
-				$unified_cache_key    = 'unified_table_exists_' . md5($table_name);
-				$cache_group  = 'unified_payment_gateway';
-
-				$table_exists = wp_cache_get($unified_cache_key, $cache_group);
-
-				if (false === $table_exists) {
-				    // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.NotPrepared
-				    $table_exists = $wpdb->get_var(
-				        $wpdb->prepare("SHOW TABLES LIKE %s", $table_name)
-				    );
-
-				    // Cache result for 1 hour
-				    wp_cache_set($unified_cache_key, $table_exists, $cache_group, HOUR_IN_SECONDS);
-				}
-
-				if ($table_exists !== $table_name) {
-				    // Create the table if not exists
-				    require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-
-				    $charset_collate = $wpdb->get_charset_collate();
-
-				    $create_sql = "CREATE TABLE $table_name (
-				        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-				        order_id BIGINT UNSIGNED NOT NULL,
-				        uuid VARCHAR(100) NOT NULL,
-				        payment_link TEXT NOT NULL,
-				        customer_email VARCHAR(191),
-				        amount DECIMAL(18,2),
-				        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-				    ) $charset_collate;";
-
-				    dbDelta($create_sql);
-
-				    wc_get_logger()->info("Created missing `$table_name` table.", [
-				        'source' => 'unified-payment-gateway',
-				        'context' => ['table' => $table_name],
-				    ]);
-				}
-
-				// Prepare amount
-				$formatted_amount = number_format((float) ($response_data['data']['amount'] ?? 0), 2, '.', '');
-
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Insert is safely prepared with format specifiers
-				$wpdb->insert(
-				    $table_name,
-				    [
-				        'order_id'       => $order_id,
-				        'uuid'           => sanitize_text_field($pay_id),
-				        'payment_link'   => esc_url_raw($response_data['data']['payment_link'] ?? ''),
-				        'customer_email' => sanitize_email($response_data['data']['customer_email'] ?? ''),
-				        'amount'         => $formatted_amount,
-				        'created_at'     => current_time('mysql', 1),
-				    ],
-				    ['%d', '%s', '%s', '%s', '%s', '%s']
-				);
-
-				wc_get_logger()->info('Stored order payment link to DB.', [
-				    'source'  => 'unified-payment-gateway',
-				    'context' => [
-				        'order_id' => $order_id,
-				        'uuid'     => $pay_id,
-				        'amount'   => $formatted_amount,
-				    ],
-				]);
-
-				// **Update Order Status**
-				$order->update_status('pending', __('Payment pending.', 'unified-payment-gateway'));
-
-				// **Add Order Note (If Not Exists)**
-				// translators: %s represents the account title.
-				$new_note = sprintf(
-					/* translators: %s represents the account title. */
-					esc_html__('Payment initiated via Unified. Awaiting your completion ( %s )', 'unified-payment-gateway'),
-					esc_html($account['title'])
-				);
-				$existing_notes = $order->get_customer_order_notes();
-
-				if (!array_filter($existing_notes, fn($note) => trim(wp_strip_all_tags($note->comment_content)) === trim($new_note))) {
-					$order->add_order_note($new_note, false, true);
-				}				
-
-				$order_id   = $order->get_id();
-				$uuid = sanitize_text_field($response_data['data']['pay_id']);
-
-				$json_data = json_encode($response_data);
-				wc_get_logger()->info(
-				    'Received successful payment API response. Saving order payment link data.',
-				    [
-				        'source'  => 'unified-payment-gateway',
-				        'context' => [
-				            'order_id'       => $order_id,
-				            'uuid'           => $uuid,
-				            'payment_link'   => $response_data['data']['payment_link'] ?? '',
-				            'customer_email' => $response_data['data']['customer_email'] ?? '',
-				            'amount'         => $response_data['data']['amount'] ?? '',
-				        ],
-				    ]
-				);
-
-				if (!empty($lock_key)) {
-					$this->release_lock($lock_key);
-				}
-				return [
-		            'result'       => 'success',
-		            'order_id'     => $order->get_id(),
-		            'payment_link' => esc_url($response_data['data']['payment_link']),
-		        ];
-			}
-
-			// **Handle Payment Failure**
-			if (!empty($response_data['message'])) {
-				$error_message = sanitize_text_field($response_data['message']);
-			} elseif (!empty($response_data['error'])) {
-				$error_message = sanitize_text_field($response_data['error']);
-			} elseif (!empty($response_data['data']['error'])) {
-				$error_message = sanitize_text_field($response_data['data']['error']);
-			} else {
-				$error_message = __('Unknown error occurred.', 'unified-payment-gateway');
-			}
-
-			wc_get_logger()->error("Final payment failure using '{$account['title']}': $error_message", $logger_context);
-			// **Add Order Note for Failed Payment**
-			$order->add_order_note(
-				sprintf(
-					/* translators: 1: Account title, 2: Error message. */
-					esc_html__('Payment failed using account: %1$s. Error: %2$s', 'unified-payment-gateway'),
-					esc_html($account['title']),
-					esc_html($error_message)
-				)
-			);
-
-			// Add WooCommerce error notice
-			wc_add_notice(__('Payment error: ', 'unified-payment-gateway') . $error_message, 'error');
-			if (!empty($lock_key)) {
-				$this->release_lock($lock_key);
-			}
-			// return ['result' => 'fail'];			 
-	        return [
-	            'result'         => 'fail',
-	            'payment_result' => [
-	                'status'  => 'failure',
-	                'message' => 'fail message',
-	            ],
-	        ];
 		}
+
+		// --------------------
+		// Validate at least one usable account
+		// --------------------
+		$account = $this->get_next_available_account([]);
+		if (!$account || !is_array($account)) {
+			wc_get_logger()->error('No active payment accounts available.', $logger_context);
+			wc_add_notice(__('Payment configuration error. Please contact support.', 'unified-payment-gateway'), 'error');
+			return ['result' => 'fail'];
+		}
+
+		// --------------------
+		// Prepare data for popup (user + order details)
+		// --------------------
+		$api_public_key = $this->sandbox ? $account['sandbox_public_key'] : $account['live_public_key'];
+		$api_secret_key = $this->sandbox ? $account['sandbox_secret_key'] : $account['live_secret_key'];
+
+		$prepared_data = $this->unified_prepare_payment_data($order, $api_public_key, $api_secret_key);
+
+		// --------------------
+		// Lock order to prevent double submission
+		// --------------------
+		if (!$order->get_meta('_upg_locked')) {
+			$order->update_meta_data('_upg_locked', 1);
+			$order->update_meta_data('_upg_lock_time', current_time('mysql'));
+			$order->save();
+		}
+
+		// --------------------
+		// Assign payment method to order (FIX)
+		// --------------------
+		$order->set_payment_method($this);
+		$order->save();
+
+		wc_get_logger()->info("Order {$order_id} validated. Prepared data for popup.", $logger_context);
+
+		// --------------------
+		// Return data for frontend popup
+		// --------------------
+		return [
+			'redirect'   => '', // required by WooCommerce
+			'result'     => 'success',
+			'order_id'   => $order->get_id(),
+			'order_data' => $prepared_data,
+			'message'    => __('Ready to open payment popup.', 'unified-payment-gateway'),
+		];
 	}
 
-	// public function process_payment( $order_id ) {
-	//     $order = wc_get_order( $order_id );
 
-	//     // Example: redirect to a payment popup / external page
-	//     return [
-	//         'result'   => 'success',
-	//         'redirect' => $this->get_return_url( $order ), // or your custom payment URL
-	//     ];
-	// }
+	public function render_payment_popup() {
+		if (!is_checkout()) return; // Only render on checkout
+		?>
+		<div class="unified-popup">
+			<div class="modal">
+
+				<!-- Header -->
+				<div class="modal-header">
+					<button class="back-btn"><i class="fa fa-arrow-left" aria-hidden="true"></i></button>
+					<div class="logo">
+						<img src="<?php echo esc_url( UNIFIED_ASSETS_URL . 'images/logo.png' ); ?>" width="71.5" height="26" />
+					</div>
+					<button class="close-btn">&times;</button>
+				</div>
+
+				<!-- Content -->
+				<div class="modal-body">
+
+					<div class="processing-overlay">
+						<div class="processing-card">
+							<div class="logo-wrap">
+								<div class="logo">
+									<img src="<?php echo esc_url( UNIFIED_ASSETS_URL . 'images/logo.png' ); ?>" width="100" height="39" />
+								</div>
+							</div>
+							<div class="loading-messages">
+								<p class="loading-text" id="loadingText">
+									Finding the best payment route for you...
+								</p>
+							</div>
+
+							<div class="progress-bar"><span class="progress-fill"></span></div>
+
+							<div class="methods">
+								<p>Supported payment methods:</p>
+								<div class="icons">
+									<!-- JS will populate these dynamically -->
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="stepper">
+						<!-- JS can update stepper dynamically -->
+					</div>
+
+					<div class="main-content" style="display:none">
+						<!-- Customer Details, Billing, DOB, Payment Summary -->
+					</div>
+
+					<div class="payment-method-content">
+						<!-- JS will populate payment methods and card options -->
+					</div>
+
+					<div class="Pay-content">
+						<!-- JS will populate actual payment iframe or redirect content -->
+					</div>
+
+				</div>
+
+				<!-- Footer -->
+				<div class="footer-green-border">
+					<div class="footer-wrp">
+						<span><i class="fa fa-info-circle" aria-hidden="true"></i> We need your date of birth to comply with payment regulations.</span>
+					</div>
+					<div class="modal-footer">
+						<div class="footer-card">
+							<div class="amount">
+								<span>You’ll Pay</span>
+								<div class="price" id="popup-total">$0.00 <span class="arrow"><i class="fa fa-angle-down" aria-hidden="true"></i></span></div>
+							</div>
+							<button class="proceed-btn">Proceed <span class="icon"><i class="fa fa-long-arrow-right" aria-hidden="true"></i></span></button>
+						</div>
+					</div>
+				</div>
+
+			</div>
+		</div>
+		<?php
+	}
 
 
 	// Display the "Test Order" tag in admin order details
@@ -1161,39 +885,40 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		return true;
 	}
 
-	/**
-	 * Enqueue stylesheets for the plugin.
-	 */
-	public function unified_enqueue_styles_and_scripts()
-	{
-		if (is_checkout()) {
-			// Enqueue stylesheets
-			wp_enqueue_style(
-				'unified-payment-loader-styles',
-				plugins_url('../assets/css/loader.css', __FILE__),
-				[], // Dependencies (if any)
-				'1.0', // Version number
-				'all' // Media
-			);
+	public function unified_enqueue_styles_and_scripts() {
+		if (!is_checkout()) return;
 
-			// Enqueue unified.js script
-			wp_enqueue_script(
-				'unified-js',
-				plugins_url('../assets/js/unified.js', __FILE__),
-				['jquery'], // Dependencies
-				'1.0', // Version number
-				true // Load in footer
-			);
+		// CSS
+		wp_enqueue_style(
+			'unified-popup-styles',
+			plugins_url('../assets/css/unified.css', __FILE__),
+			[],
+			$this->version,
+			'all'
+		);
 
-			// Localize script with parameters that need to be passed to unified.js
-			wp_localize_script('unified-js', 'unified_params', [
-				'ajax_url' => admin_url('admin-ajax.php'),
-				'checkout_url' => wc_get_checkout_url(),
-				'unified_loader' => plugins_url('../assets/images/loader.gif', __FILE__),
-				'unified_nonce' => wp_create_nonce('unified_payment'), // Create a nonce for verification
-				'payment_method' => $this->id,
-			]);
-		}
+		wp_enqueue_style(
+			'unified-payment-loader-styles',
+			plugins_url('../assets/css/loader.css', __FILE__),
+			[],
+			$this->version,
+			'all'
+		);
+
+		// JS
+		wp_enqueue_script(
+			'unified-js',
+			plugins_url('../assets/js/unified.js', __FILE__),
+			['jquery'],
+			$this->version,
+			true
+		);
+
+		// Localize
+		wp_localize_script('unified-js', 'unified_params', [
+			'ajax_url'       => admin_url('admin-ajax.php'),
+			'payment_method' => $this->id,
+		]);
 	}
 
 	function unified_admin_scripts($hook)

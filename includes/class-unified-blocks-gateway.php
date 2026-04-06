@@ -10,22 +10,19 @@ class UNIFIED_Blocks_Gateway extends AbstractPaymentMethodType {
     }
 
 	public function is_active() {
-		if (has_block( 'woocommerce/cart' )) {
-				return [];
-		}
-	    return ( isset( $this->settings['enabled'] ) && 'yes' === $this->settings['enabled'] );
+		return isset($this->settings['enabled']) && 'yes' === $this->settings['enabled'];
 	}
 
     // In class
 	public function get_payment_method_script_handles() {
-	   	wp_register_script(
-			'unified-blocks-js',
-			plugin_dir_url( UNIFIED_PAYMENT_GATEWAY_FILE ) . 'assets/js/unified-blocks.js',
-			[ 'wc-blocks-registry', 'wc-settings', 'wp-element' ],
+	   	wp_enqueue_script(
+			'unified-js',
+			plugin_dir_url( UNIFIED_PAYMENT_GATEWAY_FILE ) . 'assets/js/unified.js',
+			['jquery', 'wc-checkout', 'wc-blocks-registry', 'wp-element'], 
 			'1.0.0',
 			true
 		);
-	    	return [ 'unified-blocks-js' ]; // match your registered handle
+	    return [ 'unified-js' ]; // match your registered handle
 	}
 
   	public function get_payment_method_data() {

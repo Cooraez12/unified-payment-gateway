@@ -6,7 +6,7 @@
  * Author URI: https://www.dfin.ai/
  * Text Domain: unified-payment-gateway
  * Plugin URI: https://github.com/dfin-ai/unified-payment-gateway
- * Version: 1.1.5
+ * Version: 1.0.0
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
  *
