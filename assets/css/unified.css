@@ -1,0 +1,241 @@
+/* ===================== SCROLLBARS ===================== */
+.unified-popup ::-webkit-scrollbar {
+    block-size: 5px;
+    inline-size: 5px;
+}
+
+.unified-popup ::-webkit-scrollbar-track {
+    border-radius: 5px;
+    background: #E5E5E5;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb {
+    border-radius: 5px;
+    background: #C5CCD3;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb:hover {
+    background: #E5E5E5;
+}
+
+/* horizontal scrollbar */
+.unified-popup ::-webkit-scrollbar-track:horizontal {
+    background: #E5E5E5;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb:horizontal {
+    background: #C5CCD3;
+}
+
+.unified-popup ::-webkit-scrollbar-thumb:hover:horizontal {
+    background: #E5E5E5;
+}
+
+/* ===================== GENERAL ===================== */
+.unified-popup .pl-10 {
+    padding-left: 10px;
+}
+
+/* ===================== OVERLAY ===================== */
+.unified-popup {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    background: rgba(0,0,0,0.4); /* dim background */
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+/* show popup */
+.unified-popup.show {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* ===================== MODAL ===================== */
+.unified-popup .modal {
+    width: 420px;
+    max-height: 85vh;
+    background: #F5F5F5;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative; /* for loader overlay */
+}
+
+/* compact modal for stepper transitions */
+.unified-popup .modal.compact-modal {
+    background: linear-gradient(204.83deg, #F7FBF9 0%, #FFFFFF 78.4%);
+}
+
+/* ===================== HEADER ===================== */
+.unified-popup .modal-header {
+    background: #F6F7F9;
+    box-shadow: 0px 1px 2px 0px #00000014;
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+}
+
+.unified-popup .modal.compact-modal .modal-header {
+    background: linear-gradient(204.83deg, #F7FBF9 0%, #FFFFFF 78.4%);
+    border-bottom: 1px solid #ECF6F4;
+    box-shadow: none;
+}
+
+.unified-popup .close-btn {
+    border: none;
+    background: none;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.unified-popup .back-btn {
+    border: none;
+    background: none;
+    font-size: 18px;
+    cursor: pointer;
+    display: none; /* shown only in steps > 0 */
+}
+
+/* ===================== MODAL BODY ===================== */
+.unified-popup .modal-body {
+    flex: 1;
+    padding: 11px;
+    overflow-y: auto;
+    padding-bottom: 40px;
+    position: relative;
+}
+
+/* ===================== PROCESSING OVERLAY ===================== */
+.unified-popup .processing-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    background: rgba(255,255,255,0.95);
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 10;
+}
+
+.unified-popup .processing-overlay.show {
+    display: flex;
+}
+
+.unified-popup .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: #E5E5E5;
+    border-radius: 3px;
+    margin-top: 10px;
+}
+
+.unified-popup .progress-fill {
+    width: 0%;
+    height: 100%;
+    background: #4CAF50;
+    border-radius: 3px;
+    transition: width 0.1s linear;
+}
+
+/* ===================== MAIN CONTENT ===================== */
+.unified-popup .main-content {
+    display: none;
+    animation: fadeInUp 0.35s ease;
+}
+
+/* ===================== PAYMENT METHODS ===================== */
+.unified-popup .payment-method-content,
+.unified-popup .Pay-content {
+    display: none;
+}
+
+/* ===================== FOOTER ===================== */
+.unified-popup .footer-green-border {
+    border-top: 1px solid #4CAF50;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #4B5055;
+}
+
+.unified-popup .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 0;
+}
+
+/* ===================== CARD ELEMENTS ===================== */
+.unified-popup .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.unified-popup .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.unified-popup .card-header .card-title {
+    display: flex;
+    align-items: center;
+}
+
+.unified-popup .card-header .card-title span {
+    color: #171717;
+    font-weight: 500;
+    font-size: 14px;
+    padding-left: 5px;
+}
+
+.unified-popup .card-header .card-title span span {
+    color: #4B5055;
+    font-weight: 400;
+}
+
+/* ===================== PROCESSING STATE ===================== */
+.unified-popup .processing-active .stepper,
+.unified-popup .processing-active .modal-header,
+.unified-popup .processing-active .modal-footer,
+.unified-popup .processing-active .footer-green-border {
+    display: none;
+}
+
+.unified-popup .processing-active .main-content {
+    display: none !important;
+}
+
+.unified-popup .processing-active .processing-overlay {
+    display: flex !important;
+}
+
+.unified-popup .processing-active .modal-body {
+    padding: 0;
+}
+
+.unified-popup .modal.processing-active {
+    background: #fff;
+}
+
+/* ===================== ANIMATIONS ===================== */
+@keyframes fadeInUp {
+    0% {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
