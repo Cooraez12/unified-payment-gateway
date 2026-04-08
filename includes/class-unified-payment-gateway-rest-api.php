@@ -272,19 +272,19 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 		$stored_payment_token = $order->get_meta('_unified_pay_id');
 
 
-		if (!empty($stored_payment_token) && $stored_payment_token !== $pay_id) {
-			$this->logger->error('Pay ID mismatch', [
-				...$log_context,
-				'stored_pay_id' => $stored_payment_token,
-				'pay_id' => $pay_id
-			]);
+		// if (!empty($stored_payment_token) && $stored_payment_token !== $pay_id) {
+		// 	$this->logger->error('Pay ID mismatch', [
+		// 		...$log_context,
+		// 		'stored_pay_id' => $stored_payment_token,
+		// 		'pay_id' => $pay_id
+		// 	]);
 
-			return new WP_REST_Response([
-				'success' => false,
-				'error_code' => 'PAY_ID_MISMATCH',
-				'message' => 'Payment verification failed. Pay ID does not match.'
-			], 400);
-		}
+		// 	return new WP_REST_Response([
+		// 		'success' => false,
+		// 		'error_code' => 'PAY_ID_MISMATCH',
+		// 		'message' => 'Payment verification failed. Pay ID does not match.'
+		// 	], 400);
+		// }
 
 		$settings = get_option('woocommerce_unified_settings', []);
 		$success_status = isset($settings['order_status']) ? sanitize_text_field($settings['order_status']) : 'processing';
