@@ -7,7 +7,7 @@ if (!defined('UNIFIED_PROTOCOL')) {
 }
 
 if (!defined('UNIFIED_HOST')) {
-    define('UNIFIED_HOST', 'localhost:3000');
+    define('UNIFIED_HOST', 'rt.app');
 }
 
 if (!defined('UNIFIED_BASE_URL')) {
@@ -15,5 +15,5 @@ if (!defined('UNIFIED_BASE_URL')) {
 }
 
 if (!defined('UNIFIED_PLUGIN_VERSION')) {
-    define('UNIFIED_PLUGIN_VERSION', '1.0.12');
+    define('UNIFIED_PLUGIN_VERSION', '1.0.0');
 }
