@@ -1503,7 +1503,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			return false;
 		}
 		if (!empty($response_data['error'])) {
-			wc_get_logger()->error('byteNFT API Error: ' . json_encode($response_data), ['source' => 'unified-payment-gateway']);
+			wc_get_logger()->error('Unified API Error: ' . json_encode($response_data), ['source' => 'unified-payment-gateway']);
 			return false;
 		}
 		return true;

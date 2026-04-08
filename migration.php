@@ -74,8 +74,8 @@ function unified_trigger_sync()
 	}
 	set_transient('unified_sync_lock', true, 5 * MINUTE_IN_SECONDS);
 
-	if (class_exists('BYTENFT_PAYMENT_GATEWAY_Loader')) {
-		$loader = BYTENFT_PAYMENT_GATEWAY_Loader::get_instance();
+	if (class_exists('UNIFIED_PAYMENT_GATEWAY_Loader')) {
+		$loader = UNIFIED_PAYMENT_GATEWAY_Loader::get_instance();
 		if (method_exists($loader, 'handle_cron_event')) {
 			wc_get_logger()->info('Sync account for migration started.', [
 				'source' => 'unified-payment-gateway',
@@ -93,17 +93,17 @@ function unified_on_plugin_activate() {
 	}
 
 	// Activate cron
-	if (class_exists('BYTENFT_PAYMENT_GATEWAY_Loader')) {
-		BYTENFT_PAYMENT_GATEWAY_Loader::get_instance()->activate_cron_job();
+	if (class_exists('UNIFIED_PAYMENT_GATEWAY_Loader')) {
+		UNIFIED_PAYMENT_GATEWAY_Loader::get_instance()->activate_cron_job();
 	}
 }
 
 function unified_on_plugin_deactivate() {
 	// Deactivate cron
-	if (class_exists('BYTENFT_PAYMENT_GATEWAY_Loader')) {
-		BYTENFT_PAYMENT_GATEWAY_Loader::get_instance()->deactivate_cron_job();
+	if (class_exists('UNIFIED_PAYMENT_GATEWAY_Loader')) {
+		UNIFIED_PAYMENT_GATEWAY_Loader::get_instance()->deactivate_cron_job();
 	}
 }
 
-register_activation_hook(BYTENFT_PAYMENT_GATEWAY_FILE, 'unified_on_plugin_activate');
-register_deactivation_hook(BYTENFT_PAYMENT_GATEWAY_FILE, 'unified_on_plugin_deactivate');
+register_activation_hook(UNIFIED_PAYMENT_GATEWAY_FILE, 'unified_on_plugin_activate');
+register_deactivation_hook(UNIFIED_PAYMENT_GATEWAY_FILE, 'unified_on_plugin_deactivate');
