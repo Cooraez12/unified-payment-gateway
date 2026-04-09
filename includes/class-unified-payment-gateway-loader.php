@@ -593,135 +593,10 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		wp_clear_scheduled_hook('unified_cron_event');
 	}
 
-
-	public function handle_cron_event()
-	{
+	public function unified_manual_sync_callback() {
 		$logger_context = ['source' => 'unified-payment-gateway'];
 
-		$accounts = get_option('woocommerce_unified_payment_gateway_accounts');
-		if (is_string($accounts)) {
-			$unserialized = maybe_unserialize($accounts);
-			$accounts = is_array($unserialized) ? $unserialized : [];
-		}
-
-		if (!$accounts || !is_array($accounts)) {
-			wc_get_logger()->warning('No payment accounts found or the account format is invalid. Sync aborted.', $logger_context);
-			return [];
-		}
-
-		$accountsData = [];
-
-		foreach ($accounts as &$account) {
-			$isSandboxEnabled = isset($account['has_sandbox']) && $account['has_sandbox'] === 'on';
-
-			// Prepare both live and sandbox entries
-			if (!empty($account['live_public_key']) && !empty($account['live_secret_key'])) {
-				$accountsData[] = [
-					'account_name' => $account['title'],
-					'public_key'   => $account['live_public_key'],
-					'secret_key'   => $account['live_secret_key'],
-					'mode'         => 'live',
-				];
-			}
-
-			if ($isSandboxEnabled && !empty($account['sandbox_public_key']) && !empty($account['sandbox_secret_key'])) {
-				$accountsData[] = [
-					'account_name' => $account['title'],
-					'public_key'   => $account['sandbox_public_key'],
-					'secret_key'   => $account['sandbox_secret_key'],
-					'mode'         => 'sandbox',
-				];
-			}
-		}
-
-		if (empty($accountsData)) {
-			wc_get_logger()->warning('No valid credentials found in any payment account. Sync skipped.', $logger_context);
-			return [];
-		}
-
-		$url = esc_url($this->base_url . '/api/sync-account-status');
-		$response = wp_remote_post($url, [
-			'headers' => [
-				'Content-Type'  => 'application/json',
-			],
-			'body' => json_encode(['accounts' => $accountsData]),
-			'timeout' => 15,
-		]);
-
-		if (is_wp_error($response)) {
-			wc_get_logger()->error('Unable to connect to the sync service. Please check the server connection or endpoint.', $logger_context);
-			return [];
-		}
-
-		$response_body = wp_remote_retrieve_body($response);
-		$response_data = json_decode($response_body, true);
-
-		$updated = false;
-		$statusSummary = [];
-
-		if (!empty($response_data['data'])) {
-			foreach ($response_data['data'] as $statusData) {
-				if (
-					isset($statusData['mode'], $statusData['public_key'], $statusData['status']) &&
-					!empty($statusData['status'])
-				) {
-					foreach ($accounts as &$account) {
-						if (
-							$statusData['mode'] === 'live' &&
-							$account['live_public_key'] === $statusData['public_key']
-						) {
-							$account['live_status'] = $statusData['status'];
-							$updated = true;
-							$statusSummary[] = [
-								'title'  => $account['title'] ?? 'N/A',
-								'mode'   => $statusData['mode'],
-								'status' => $statusData['status'],
-							];
-						}
-
-						if (
-							$statusData['mode'] === 'sandbox' &&
-							$account['sandbox_public_key'] === $statusData['public_key']
-						) {
-							$account['sandbox_status'] = $statusData['status'];
-							$updated = true;
-							$statusSummary[] = [
-								'title'  => $account['title'] ?? 'N/A',
-								'mode'   => $statusData['mode'],
-								'status' => $statusData['status'],
-							];
-						}
-					}
-				}
-			}
-		}
-
-		if (!empty($statusSummary)) {
-			if ($updated) {
-				update_option('woocommerce_unified_payment_gateway_accounts', $accounts);
-
-				wc_get_logger()->info('Payment account statuses were successfully updated after syncing.', [
-					'source'  => 'unified-payment-gateway',
-					'context' => ['updated_accounts' => $statusSummary],
-				]);
-			} else {
-				wc_get_logger()->info('Payment accounts were checked, but no updates were necessary.', [
-					'source'  => 'unified-payment-gateway',
-					'context' => ['checked_accounts' => $statusSummary],
-				]);
-			}
-		} else {
-			wc_get_logger()->info('Sync completed. No account status data was returned from the server.', $logger_context);
-		}
-
-		return $statusSummary;
-	}
-
-
-	function unified_manual_sync_callback()
-	{
-		$logger_context = ['source' => 'unified-payment-gateway'];
-		// Verify nonce first
+		// Verify nonce
 		if (!check_ajax_referer('unified_sync_nonce', 'nonce', false)) {
 			wc_get_logger()->error('Security validation failed during manual sync.', $logger_context);
 			wp_send_json_error([
@@ -732,7 +607,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 		// Check user capabilities
 		if (!current_user_can('manage_woocommerce')) {
-		wc_get_logger()->error('Unauthorized manual sync attempt by user ID: ' . get_current_user_id(), $logger_context);
+			wc_get_logger()->error('Unauthorized manual sync attempt by user ID: ' . get_current_user_id(), $logger_context);
 			wp_send_json_error([
 				'message' => __('You do not have permission to perform this action.', 'unified-payment-gateway')
 			], 403);
@@ -744,20 +619,31 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		try {
 			ob_start();
 
+			// Run the cron handler to get updated statuses
 			$statusSummary = $this->handle_cron_event();
-			$output = ob_get_clean();
 
+			$output = ob_get_clean();
 			if (!empty($output)) {
 				wc_get_logger()->warning('Unexpected output generated during sync: ' . $output, $logger_context);
+			}
+
+			if (empty($statusSummary)) {
+				// Treat as failure if nothing updated or connectivity issue
+				wc_get_logger()->error('Payment accounts sync failed: No valid accounts updated.', $logger_context);
+				wp_send_json_error([
+					'message' => __('Sync failed: Unable to connect to the sync service or no valid accounts found.', 'unified-payment-gateway')
+				], 500);
+				wp_die();
 			}
 
 			wc_get_logger()->info('Payment accounts sync completed successfully.', $logger_context);
 
 			wp_send_json_success([
-				'message'  => __('Payment accounts synchronized successfully.', 'unified-payment-gateway'),
+				'message'   => __('Payment accounts synchronized successfully.', 'unified-payment-gateway'),
 				'timestamp' => current_time('mysql'),
-				'statuses' => $statusSummary
+				'statuses'  => $statusSummary
 			]);
+
 		} catch (Exception $e) {
 			wc_get_logger()->error('Payment accounts sync failed: ' . $e->getMessage(), $logger_context);
 			wp_send_json_error([
@@ -766,6 +652,237 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			], 500);
 		}
 
-		wp_die(); // Always include this
+		wp_die();
+	}
+
+	public function handle_cron_event() {
+		$logger_context = ['source' => 'unified-payment-gateway'];
+
+		$accounts = get_option('woocommerce_unified_payment_gateway_accounts');
+
+		if (is_string($accounts)) {
+			$accounts = maybe_unserialize($accounts);
+		}
+
+		if (!is_array($accounts) || empty($accounts)) {
+			wc_get_logger()->warning('No payment accounts found. Sync aborted.', $logger_context);
+			return [];
+		}
+
+		// ✅ Get global sandbox setting
+		$global_settings = get_option('woocommerce_unified_settings', []);
+		$global_settings = maybe_unserialize($global_settings);
+
+		$isGlobalSandbox = !empty($global_settings['sandbox']) && $global_settings['sandbox'] === 'yes';
+
+		wc_get_logger()->info('Global Mode: ' . ($isGlobalSandbox ? 'SANDBOX' : 'LIVE'), $logger_context);
+
+		$accountsData = [];
+
+		// ✅ Build payload based on global mode
+		foreach ($accounts as $account) {
+
+			$isSandboxEnabled = isset($account['has_sandbox']) && $account['has_sandbox'] === 'on';
+
+			if ($isGlobalSandbox) {
+				// 🔹 SANDBOX MODE → send ONLY sandbox keys
+				if ($isSandboxEnabled && !empty($account['sandbox_public_key']) && !empty($account['sandbox_secret_key'])) {
+					$accountsData[] = [
+						'account_name' => $account['title'] ?? 'N/A',
+						'public_key'   => $account['sandbox_public_key'],
+						'secret_key'   => $account['sandbox_secret_key'],
+						'mode'         => 'sandbox',
+					];
+				}
+			} else {
+				// 🔹 LIVE MODE → send ONLY live keys
+				if (!empty($account['live_public_key']) && !empty($account['live_secret_key'])) {
+					$accountsData[] = [
+						'account_name' => $account['title'] ?? 'N/A',
+						'public_key'   => $account['live_public_key'],
+						'secret_key'   => $account['live_secret_key'],
+						'mode'         => 'live',
+					];
+				}
+			}
+		}
+
+		if (empty($accountsData)) {
+			wc_get_logger()->warning('No valid credentials found for current mode. Sync skipped.', $logger_context);
+			return [];
+		}
+
+		$url = esc_url($this->base_url . '/api/sync-account-status');
+
+		wc_get_logger()->info('Sync API URL: ' . $url, $logger_context);
+		wc_get_logger()->info('Sync Payload: ' . json_encode($accountsData), $logger_context);
+
+		$response = wp_remote_post($url, [
+			'headers' => ['Content-Type' => 'application/json'],
+			'body'    => json_encode(['accounts' => $accountsData]),
+			'timeout' => 15,
+		]);
+
+		// ❌ Connection error
+		if (is_wp_error($response)) {
+			wc_get_logger()->error('Connection failed: ' . $response->get_error_message(), $logger_context);
+			return $this->build_status_summary_from_db($accounts);
+		}
+
+		$http_code = wp_remote_retrieve_response_code($response);
+		$response_body = wp_remote_retrieve_body($response);
+
+		wc_get_logger()->info('HTTP Code: ' . $http_code, $logger_context);
+		wc_get_logger()->info('Raw Response: ' . $response_body, $logger_context);
+
+		$response_data = json_decode($response_body, true);
+
+		// ❌ Invalid JSON
+		if (json_last_error() !== JSON_ERROR_NONE) {
+			wc_get_logger()->error('Invalid JSON response: ' . json_last_error_msg(), $logger_context);
+			return $this->build_status_summary_from_db($accounts);
+		}
+
+		// ✅ Support both API formats
+		$apiStatuses = $response_data['data'] ?? $response_data['statuses'] ?? [];
+
+		if (empty($apiStatuses)) {
+			wc_get_logger()->error('Empty API response. Using DB fallback.', $logger_context);
+			return $this->build_status_summary_from_db($accounts);
+		}
+
+		wc_get_logger()->info('Parsed API statuses: ' . json_encode($apiStatuses), $logger_context);
+
+		$updated = false;
+		$statusSummary = [];
+		$processedKeys = [];
+
+		// ✅ Process API response
+		foreach ($apiStatuses as $statusData) {
+
+			if (empty($statusData['mode']) || empty($statusData['public_key']) || empty($statusData['status'])) {
+				continue;
+			}
+
+			$mode = $statusData['mode'];
+			$publicKey = $statusData['public_key'];
+			$status = strtolower($statusData['status']);
+
+			$processedKeys[] = $publicKey;
+
+			foreach ($accounts as &$account) {
+
+				$matched = false;
+
+				if ($mode === 'live' && $account['live_public_key'] === $publicKey) {
+					$account['live_status'] = $status;
+					$matched = true;
+				}
+
+				if ($mode === 'sandbox' && $account['sandbox_public_key'] === $publicKey) {
+					$account['sandbox_status'] = $status;
+					$matched = true;
+				}
+
+				if ($matched) {
+					$usable = ($status === 'active');
+					$reason = $statusData['message'] ?? '';
+
+					if (!$usable && empty($reason)) {
+						$reason = 'Account is not active';
+					}
+
+					$statusSummary[] = [
+						'title'  => $account['title'] ?? 'N/A',
+						'mode'   => $mode,
+						'status' => $status,
+						'usable' => $usable,
+						'reason' => $reason,
+					];
+
+					$updated = true;
+				}
+			}
+		}
+
+		// ✅ Handle missing responses (important)
+		foreach ($accounts as &$account) {
+
+			if ($isGlobalSandbox) {
+				// Only sandbox relevant
+				if (!empty($account['has_sandbox']) && $account['has_sandbox'] === 'on') {
+					if (!in_array($account['sandbox_public_key'], $processedKeys)) {
+						$account['sandbox_status'] = 'inactive';
+
+						$statusSummary[] = [
+							'title'  => $account['title'],
+							'mode'   => 'sandbox',
+							'status' => 'inactive',
+							'usable' => false,
+							'reason' => 'No response from sync service',
+						];
+
+						$updated = true;
+					}
+				}
+			} else {
+				// Only live relevant
+				if (!in_array($account['live_public_key'], $processedKeys)) {
+					$account['live_status'] = 'inactive';
+
+					$statusSummary[] = [
+						'title'  => $account['title'],
+						'mode'   => 'live',
+						'status' => 'inactive',
+						'usable' => false,
+						'reason' => 'No response from sync service',
+					];
+
+					$updated = true;
+				}
+			}
+		}
+
+		// ✅ Save updates
+		if ($updated) {
+			update_option('woocommerce_unified_payment_gateway_accounts', $accounts);
+
+			wc_get_logger()->info('Account statuses updated.', [
+				'source'  => 'unified-payment-gateway',
+				'summary' => $statusSummary
+			]);
+		} else {
+			wc_get_logger()->info('No changes required.', $logger_context);
+		}
+
+		return $statusSummary;
+	}
+
+	/**
+	 * Build fallback summary from DB without calling remote service
+	 */
+	private function build_status_summary_from_db($accounts) {
+		$summary = [];
+		foreach ($accounts as $account) {
+			if (!empty($account['live_status'])) {
+				$summary[] = [
+					'title'  => $account['title'] ?? 'N/A',
+					'mode'   => 'live',
+					'status' => $account['live_status'],
+					'usable' => $account['live_status'] === 'active',
+					'reason' => $account['live_status'] === 'active' ? '' : 'Account is not active',
+				];
+			}
+			if (!empty($account['sandbox_status'])) {
+				$summary[] = [
+					'title'  => $account['title'] ?? 'N/A',
+					'mode'   => 'sandbox',
+					'status' => $account['sandbox_status'],
+					'usable' => $account['sandbox_status'] === 'active',
+					'reason' => $account['sandbox_status'] === 'active' ? '' : 'Account is not active',
+				];
+			}
+		}
+		return $summary;
 	}
 }

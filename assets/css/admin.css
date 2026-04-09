@@ -206,3 +206,12 @@
 	background-color: #fff0f0;
 	color: #dc3545;
 }
+
+.unified-accounts-container .account-status-label.usable {
+    background-color: green;
+	color:white;
+}
+.unified-accounts-container .account-status-label.unusable {
+    background-color: red;
+	color:white;
+}

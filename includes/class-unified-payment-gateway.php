@@ -467,6 +467,10 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		$global_settings = maybe_unserialize($global_settings);
 		$sandbox_enabled = !empty($global_settings['sandbox']) && $global_settings['sandbox'] === 'yes';
 
+		// Get latest statuses from sync summary if available
+		$statusSummary = get_option('unified_accounts_status_summary', []);
+		$statusSummary = maybe_unserialize($statusSummary);
+
 		$updated = false;
 		if (!empty($option_value)) {
 			foreach ($option_value as $index => &$account) {
@@ -474,16 +478,23 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 					$account['unique_id'] = $this->unified_get_unique_id();
 					$updated = true;
 				}
-				// Ensure all fields are present for new/empty accounts
-				if (!isset($account['checkout_title'])) {
-					$account['checkout_title'] = '';
-				}
-				if (!isset($account['checkout_subtitle'])) {
-					$account['checkout_subtitle'] = '';
-				}
+				// Ensure all fields are present
+				$account = array_merge([
+					'title'            => '',
+					'priority'         => 1,
+					'checkout_title'   => '',
+					'checkout_subtitle'=> '',
+					'live_status'      => 'inactive',
+					'sandbox_status'   => 'inactive',
+					'live_public_key'  => '',
+					'live_secret_key'  => '',
+					'has_sandbox'      => 'off',
+					'sandbox_public_key'=> '',
+					'sandbox_secret_key'=> '',
+				], $account);
 			}
+			unset($account);
 		}
-		unset($account);
 
 		if ($updated) {
 			update_option('woocommerce_unified_payment_gateway_accounts', $option_value);
@@ -498,10 +509,14 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 			<td class="forminp">
 				<div id="global-error" class="error-message" style="color: red; margin-bottom: 10px;"></div>
 				<div class="unified-accounts-container">
+
 					<?php if (!empty($option_value)): ?>
 						<div class="unified-sync-account">
 							<span id="unified-sync-status"></span>
-							<button class="button" id="unified-sync-accounts"><span><i class="fa fa-refresh" aria-hidden="true"></i></span> <?php esc_html_e('Sync Accounts', 'unified-payment-gateway'); ?></button>
+							<button class="button" id="unified-sync-accounts">
+								<span><i class="fa fa-refresh" aria-hidden="true"></i></span>
+								<?php esc_html_e('Sync Accounts', 'unified-payment-gateway'); ?>
+							</button>
 						</div>
 					<?php endif; ?>
 
@@ -510,13 +525,27 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 					<?php else: ?>
 						<?php foreach (array_values($option_value) as $index => $account): ?>
 							<?php
-							$live_status    = (!empty($account['live_status'])) ? $account['live_status'] : '';
-							$sandbox_status = (!empty($account['sandbox_status'])) ? $account['sandbox_status'] : 'unknown';
-							$unique_id      = (!empty($account['unique_id'])) ? $account['unique_id'] : '';
+							$unique_id = $account['unique_id'] ?? '';
+
+							// Determine status based on usable
+							$live_status_to_show = 'Inactive';
+							$sandbox_status_to_show = 'Inactive';
+
+							foreach ($statusSummary as $status) {
+								if ($status['title'] === ($account['title'] ?? '')) {
+									if ($status['mode'] === 'live') {
+										$live_status_to_show = $status['usable'] ? $status['status'] : 'Inactive';
+									}
+									if ($status['mode'] === 'sandbox') {
+										$sandbox_status_to_show = $status['usable'] ? $status['status'] : 'Inactive';
+									}
+								}
+							}
 							?>
 							<div class="unified-account" data-index="<?php echo esc_attr($index); ?>">
-								<input type="hidden" name="accounts[<?php echo esc_attr($index); ?>][live_status]" value="<?php echo esc_attr($account['live_status'] ?? ''); ?>">
-								<input type="hidden" name="accounts[<?php echo esc_attr($index); ?>][sandbox_status]" value="<?php echo esc_attr($account['sandbox_status'] ?? ''); ?>">
+								<input type="hidden" name="accounts[<?php echo esc_attr($index); ?>][live_status]" value="<?php echo esc_attr($live_status_to_show); ?>">
+								<input type="hidden" name="accounts[<?php echo esc_attr($index); ?>][sandbox_status]" value="<?php echo esc_attr($sandbox_status_to_show); ?>">
+
 								<div class="title-blog">
 									<h4>
 										<span class="account-name-display">
@@ -524,14 +553,15 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 										</span>
 										&nbsp;<i class="fa fa-caret-down <?php echo esc_attr($this->id); ?>-toggle-btn" aria-hidden="true"></i>
 									</h4>
+
 									<div class="action-button">
 										<div class="account-status-block" style="float: right;">
-											<span class="account-status-label <?php echo esc_attr($sandbox_enabled ? 'sandbox-status' : 'live-status'); ?> <?php echo esc_attr(strtolower($sandbox_enabled ? ($sandbox_status ?? '') : ($live_status ?? ''))); ?>">
+											<span class="account-status-label <?php echo esc_attr($sandbox_enabled ? 'sandbox-status' : 'live-status'); ?> <?php echo esc_attr(($sandbox_enabled ? $sandbox_status_to_show : $live_status_to_show) === 'Active' ? 'usable' : 'unusable'); ?>">
 												<?php
 												if ($sandbox_enabled) {
-													echo esc_html__('Sandbox Account Status: ', 'unified-payment-gateway') . esc_html(ucfirst($sandbox_status));
+													echo esc_html__('Sandbox Account Status: ', 'unified-payment-gateway') . esc_html($sandbox_status_to_show);
 												} else {
-													echo esc_html__('Live Account Status: ', 'unified-payment-gateway') . esc_html(ucfirst($live_status));
+													echo esc_html__('Live Account Status: ', 'unified-payment-gateway') . esc_html($live_status_to_show);
 												}
 												?>
 											</span>
@@ -543,48 +573,42 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 								</div>
 
 								<div class="<?php echo esc_attr($this->id); ?>-info">
+									<!-- Keep rest of your account fields (title, priority, keys, sandbox) here as is -->
+									<!-- No changes needed for inputs; only status display updated -->
+
 									<div class="add-blog title-priority">
 										<div class="account-input account-name">
 											<label><?php esc_html_e('Account Name', 'unified-payment-gateway'); ?></label>
-											<input type="text" class="account-title" name="accounts[<?php echo esc_attr($index); ?>][title]" placeholder="<?php esc_attr_e('Account Title', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['title'] ?? ''); ?>">
+											<input type="text" class="account-title" name="accounts[<?php echo esc_attr($index); ?>][title]" placeholder="<?php esc_attr_e('Account Title', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['title']); ?>">
 										</div>
-										<div>
-											<input type="hidden" name="accounts[<?php echo esc_attr($index); ?>][unique_id]" value="<?php echo esc_attr($unique_id); ?>" readonly>
-										</div>
+										<input type="hidden" name="accounts[<?php echo esc_attr($index); ?>][unique_id]" value="<?php echo esc_attr($unique_id); ?>" readonly>
 										<div class="account-input priority-name">
 											<label><?php esc_html_e('Priority', 'unified-payment-gateway'); ?></label>
-											<input type="number" class="account-priority" name="accounts[<?php echo esc_attr($index); ?>][priority]" placeholder="<?php esc_attr_e('Priority', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['priority'] ?? '1'); ?>" min="1">
+											<input type="number" class="account-priority" name="accounts[<?php echo esc_attr($index); ?>][priority]" placeholder="<?php esc_attr_e('Priority', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['priority']); ?>" min="1">
 										</div>
-
 									</div>
 
 									<div class="add-blog">
 										<div class="account-input">
 											<label><?php esc_html_e('Checkout Title', 'unified-payment-gateway'); ?></label>
-											<input type="text"
-												name="accounts[<?php echo esc_attr($index); ?>][checkout_title]"
-												placeholder="<?php esc_attr_e('Title shown to customers at checkout', 'unified-payment-gateway'); ?>"
-												value="<?php echo esc_attr($account['checkout_title'] ?? ''); ?>">
+											<input type="text" name="accounts[<?php echo esc_attr($index); ?>][checkout_title]" placeholder="<?php esc_attr_e('Title shown to customers at checkout', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['checkout_title']); ?>">
 										</div>
 									</div>
 
 									<div class="add-blog">
 										<div class="account-input">
 											<label><?php esc_html_e('Checkout Subtitle', 'unified-payment-gateway'); ?></label>
-											<textarea
-												name="accounts[<?php echo esc_attr($index); ?>][checkout_subtitle]"
-												placeholder="<?php esc_attr_e('Subtitle/description shown below the title at checkout', 'unified-payment-gateway'); ?>"
-												rows="2"><?php echo esc_textarea($account['checkout_subtitle'] ?? ''); ?></textarea>
+											<textarea name="accounts[<?php echo esc_attr($index); ?>][checkout_subtitle]" placeholder="<?php esc_attr_e('Subtitle/description shown below the title at checkout', 'unified-payment-gateway'); ?>" rows="2"><?php echo esc_textarea($account['checkout_subtitle']); ?></textarea>
 										</div>
 									</div>
 
 									<div class="add-blog">
 										<div class="account-input">
 											<label><?php esc_html_e('Live Keys', 'unified-payment-gateway'); ?></label>
-											<input type="text" class="live-public-key" name="accounts[<?php echo esc_attr($index); ?>][live_public_key]" placeholder="<?php esc_attr_e('Public Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['live_public_key'] ?? ''); ?>">
+											<input type="text" class="live-public-key" name="accounts[<?php echo esc_attr($index); ?>][live_public_key]" placeholder="<?php esc_attr_e('Public Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['live_public_key']); ?>">
 										</div>
 										<div class="account-input">
-											<input type="text" class="live-secret-key" name="accounts[<?php echo esc_attr($index); ?>][live_secret_key]" placeholder="<?php esc_attr_e('Secret Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['live_secret_key'] ?? ''); ?>">
+											<input type="text" class="live-secret-key" name="accounts[<?php echo esc_attr($index); ?>][live_secret_key]" placeholder="<?php esc_attr_e('Secret Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['live_secret_key']); ?>">
 										</div>
 									</div>
 
@@ -597,32 +621,31 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 										<label for="<?php echo esc_attr($checkbox_id); ?>"><?php esc_html_e('Do you have the sandbox keys?', 'unified-payment-gateway'); ?></label>
 									</div>
 
-									<?php
-									$sandbox_container_id    = $this->id . '-sandbox-keys-' . $index;
-									$sandbox_container_class = $this->id . '-sandbox-keys';
-									$sandbox_display_style   = $account['has_sandbox'] == 'off' ? 'display: none;' : '';
-									?>
-									<div id="<?php echo esc_attr($sandbox_container_id); ?>" class="<?php echo esc_attr($sandbox_container_class); ?>" style="<?php echo esc_attr($sandbox_display_style); ?>">
+									<div id="<?php echo esc_attr($this->id . '-sandbox-keys-' . $index); ?>" class="<?php echo esc_attr($this->id . '-sandbox-keys'); ?>" style="<?php echo esc_attr($account['has_sandbox'] == 'off' ? 'display: none;' : ''); ?>">
 										<div class="add-blog">
 											<div class="account-input">
 												<label><?php esc_html_e('Sandbox Keys', 'unified-payment-gateway'); ?></label>
-												<input type="text" class="sandbox-public-key" name="accounts[<?php echo esc_attr($index); ?>][sandbox_public_key]" placeholder="<?php esc_attr_e('Public Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['sandbox_public_key'] ?? ''); ?>">
+												<input type="text" class="sandbox-public-key" name="accounts[<?php echo esc_attr($index); ?>][sandbox_public_key]" placeholder="<?php esc_attr_e('Public Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['sandbox_public_key']); ?>">
 											</div>
 											<div class="account-input">
-												<input type="text" class="sandbox-secret-key" name="accounts[<?php echo esc_attr($index); ?>][sandbox_secret_key]" placeholder="<?php esc_attr_e('Secret Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['sandbox_secret_key'] ?? ''); ?>">
+												<input type="text" class="sandbox-secret-key" name="accounts[<?php echo esc_attr($index); ?>][sandbox_secret_key]" placeholder="<?php esc_attr_e('Secret Key', 'unified-payment-gateway'); ?>" value="<?php echo esc_attr($account['sandbox_secret_key']); ?>">
 											</div>
 										</div>
 									</div>
+
 								</div>
 							</div>
 						<?php endforeach; ?>
 					<?php endif; ?>
+
 					<?php wp_nonce_field('unified_accounts_nonce_action', 'unified_accounts_nonce'); ?>
+
 					<div class="add-account-btn">
 						<button type="button" class="button unified-add-account">
 							<span>+</span> <?php esc_html_e('Add Account', 'unified-payment-gateway'); ?>
 						</button>
 					</div>
+
 				</div>
 			</td>
 		</tr>
