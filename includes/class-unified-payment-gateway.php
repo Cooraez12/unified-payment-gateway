@@ -598,7 +598,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 									<div class="add-blog">
 										<div class="account-input">
 											<label><?php esc_html_e('Checkout Subtitle', 'unified-payment-gateway'); ?></label>
-											<textarea name="accounts[<?php echo esc_attr($index); ?>][checkout_subtitle]" placeholder="<?php esc_attr_e('Subtitle/description shown below the title at checkout', 'unified-payment-gateway'); ?>" rows="2"><?php echo esc_textarea($account['checkout_subtitle']); ?></textarea>
+											<textarea name="accounts[<?php echo esc_attr($index); ?>][checkout_subtitle]" placeholder="<?php esc_attr_e('Subtitle/description shown below the title at checkout', 'unified-payment-gateway'); ?>" rows="2" style="width: 100%; margin-bottom: 6px;"><?php echo esc_textarea($account['checkout_subtitle']); ?></textarea>
 										</div>
 									</div>
 
