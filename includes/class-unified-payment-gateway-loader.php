@@ -620,7 +620,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			ob_start();
 
 			// Run the cron handler to get updated statuses
-			$statusSummary = $this->handle_cron_event();
+			$statusSummary = $this->handle_cron_event($_POST['accounts']);
 
 			$output = ob_get_clean();
 			if (!empty($output)) {
@@ -655,10 +655,12 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		wp_die();
 	}
 
-	public function handle_cron_event() {
+	public function handle_cron_event($accounts = []) {
 		$logger_context = ['source' => 'unified-payment-gateway'];
 
-		$accounts = get_option('woocommerce_unified_payment_gateway_accounts');
+		if (empty($accounts)) {
+			$accounts = get_option('woocommerce_unified_payment_gateway_accounts');
+		}
 
 		if (is_string($accounts)) {
 			$accounts = maybe_unserialize($accounts);
@@ -746,18 +748,51 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		// ✅ Support both API formats
 		$apiStatuses = $response_data['data'] ?? $response_data['statuses'] ?? [];
 
-		if (empty($apiStatuses)) {
-			wc_get_logger()->error('Empty API response. Using DB fallback.', $logger_context);
-			return $this->build_status_summary_from_db($accounts);
-		}
-
 		wc_get_logger()->info('Parsed API statuses: ' . json_encode($apiStatuses), $logger_context);
 
 		$updated = false;
 		$statusSummary = [];
 		$processedKeys = [];
 
-		// ✅ Process API response
+		// ✅ All account will be active by default.
+		foreach ($accounts as &$account) {
+
+			if ($isGlobalSandbox) {
+				// Only sandbox relevant
+				if (!empty($account['has_sandbox']) && $account['has_sandbox'] === 'on') {
+					if (!in_array($account['sandbox_public_key'], $processedKeys)) {
+						$account['sandbox_status'] = 'active';
+
+						$statusSummary[] = [
+							'title'  => $account['title'],
+							'mode'   => 'sandbox',
+							'status' => 'active',
+							'usable' => true,
+							'reason' => 'No response from sync service',
+						];
+
+						$updated = true;
+					}
+				}
+			} else {
+				// Only live relevant
+				if (!in_array($account['live_public_key'], $processedKeys)) {
+					$account['live_status'] = 'active';
+
+					$statusSummary[] = [
+						'title'  => $account['title'],
+						'mode'   => 'live',
+						'status' => 'active',
+						'usable' => true,
+						'reason' => 'No response from sync service',
+					];
+
+					$updated = true;
+				}
+			}
+		}
+
+		// ✅ Update Account Statuses based on API response
 		foreach ($apiStatuses as $statusData) {
 
 			if (empty($statusData['mode']) || empty($statusData['public_key']) || empty($statusData['status'])) {
@@ -805,43 +840,6 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			}
 		}
 
-		// ✅ Handle missing responses (important)
-		foreach ($accounts as &$account) {
-
-			if ($isGlobalSandbox) {
-				// Only sandbox relevant
-				if (!empty($account['has_sandbox']) && $account['has_sandbox'] === 'on') {
-					if (!in_array($account['sandbox_public_key'], $processedKeys)) {
-						$account['sandbox_status'] = 'inactive';
-
-						$statusSummary[] = [
-							'title'  => $account['title'],
-							'mode'   => 'sandbox',
-							'status' => 'inactive',
-							'usable' => false,
-							'reason' => 'No response from sync service',
-						];
-
-						$updated = true;
-					}
-				}
-			} else {
-				// Only live relevant
-				if (!in_array($account['live_public_key'], $processedKeys)) {
-					$account['live_status'] = 'inactive';
-
-					$statusSummary[] = [
-						'title'  => $account['title'],
-						'mode'   => 'live',
-						'status' => 'inactive',
-						'usable' => false,
-						'reason' => 'No response from sync service',
-					];
-
-					$updated = true;
-				}
-			}
-		}
 
 		// ✅ Save updates
 		if ($updated) {
