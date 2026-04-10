@@ -346,8 +346,6 @@ jQuery(document).ready(function ($) {
 					let tooltipText = statusTooltips[newStatus.toLowerCase()] || '';
 					if (!usable && reason) { tooltipText += ' (' + reason + ')'; }
                     
-                            console.log(222,newStatus);
-
 					// Update class and text based on usability
 					statusLabel
 						.removeClass('active inactive invalid unknown usable unusable')
