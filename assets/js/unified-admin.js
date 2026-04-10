@@ -277,12 +277,13 @@ jQuery(document).ready(function ($) {
                 dataType: 'json',
                 data: {
                     action: `${gatewayId}_manual_sync`,
-                    nonce: unified_admin_data.nonce
+                    nonce: unified_admin_data.nonce,
+                    accounts: collectAccounts(gatewayId)
                 },
                 success: function (response) {
                     if (response.success) {
                         $status.removeClass('error').addClass('success').text(response.data.message || 'Sync completed successfully!').fadeIn().delay(4000).fadeOut();
-                        if (typeof updateAccountStatuses === 'function') {
+                        if (typeof updateAccountStatuses === 'function') {                            
                             updateAccountStatuses(response.data.statuses, gatewayId);
                         }
                     } else {
@@ -344,6 +345,8 @@ jQuery(document).ready(function ($) {
 
 					let tooltipText = statusTooltips[newStatus.toLowerCase()] || '';
 					if (!usable && reason) { tooltipText += ' (' + reason + ')'; }
+                    
+                            console.log(222,newStatus);
 
 					// Update class and text based on usability
 					statusLabel
@@ -365,5 +368,32 @@ jQuery(document).ready(function ($) {
 
     } else {
         console.log('Could not identify form for gateway: ' + gatewayId);
+    }
+
+    function collectAccounts(gatewayId) {
+        let accounts = [];
+
+        $('.' + gatewayId + '-account').each(function () {
+            const $acc = $(this);
+
+            let account = {
+                title: $acc.find('.account-title').val() || '',
+                priority: $acc.find('.account-priority').val() || '',
+                live_public_key: $acc.find('.live-public-key').val() || '',
+                live_secret_key: $acc.find('.live-secret-key').val() || '',
+                sandbox_public_key: $acc.find('.sandbox-public-key').val() || '',
+                sandbox_secret_key: $acc.find('.sandbox-secret-key').val() || '',
+                has_sandbox: $acc.find('.' + gatewayId + '-sandbox-checkbox').is(':checked') ? 'on' : '',
+                sandbox_status: $acc.find('.sandbox-status').val() || 'unknown',
+                live_status: $acc.find('.live-status').val() || 'unknown',
+                unique_id: $acc.find('.unique-id').val() || '',
+                checkout_title: $acc.find('[name*="[checkout_title]"]').val() || '',
+                checkout_subtitle: $acc.find('[name*="[checkout_subtitle]"]').val() || ''
+            };
+
+            accounts.push(account);
+        });
+
+        return accounts;
     }
 });
