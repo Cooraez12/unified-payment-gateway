@@ -130,137 +130,129 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 	 * @return WP_REST_Response|void Standard REST response or redirect.
 	 */
 	public function unified_handle_api_request(WP_REST_Request $request)
-	{
-		$method      = $request->get_method();
-		$params      = $request->get_params();
-		$log_context = array('source' => 'unified-payment-gateway');
-		
-		/**
-		 * 1. Data Normalization
-		 * Accommodates various payload structures (Standard vs Nested api_data).
-		 */
-		$data = isset($params['api_data']) ? $params['api_data'] : $params;
-		$order_id         = intval($data['order_id'] ?? 0);
-		$api_order_status = sanitize_text_field($data['order_status'] ?? '');
-		$pay_id           = sanitize_text_field($data['pay_id'] ?? '');
-		$api_key_raw      = $data['nonce'] ?? '';
+    {
+        $method      = $request->get_method();
+        $params      = $request->get_params();
+        $log_context = array('source' => 'unified-payment-gateway');
+        
+        // Normalize payload: Check for nested 'api_data' (typical in Celery JSON posts)
+        $data = isset($params['api_data']) ? $params['api_data'] : $params;
 
-		$this->logger->info(sprintf("Unified Payment: Processing %s request for Order #%s. Provider Status: %s", $method, $order_id, $api_order_status), $log_context);
+        $order_id         = intval($data['order_id'] ?? 0);
+        $api_order_status = sanitize_text_field($data['order_status'] ?? '');
+        $pay_id           = sanitize_text_field($data['pay_id'] ?? '');
+        $api_key_raw      = $data['nonce'] ?? '';
 
-		// Validate that the order exists within WooCommerce
-		if ($order_id <= 0) {
-			return new WP_REST_Response(['success' => false, 'message' => 'Invalid Order ID'], 400);
-		}
+        $this->logger->info(sprintf("Unified Payment: Received %s for Order #%s. Status: %s", $method, $order_id, $api_order_status), $log_context);
 
-		$order = wc_get_order($order_id);
-		if (!$order) {
-			$this->logger->error(sprintf("Order #%s could not be found in the database.", $order_id), $log_context);
-			return new WP_REST_Response(['success' => false, 'message' => 'Order not found'], 404);
-		}
+        if ($order_id <= 0) {
+            return new WP_REST_Response(['success' => false, 'message' => 'Invalid Order ID'], 400);
+        }
 
-		/**
-		 * 2. Status Guard Clause
-		 * Prevents re-processing orders that have already reached a completed/successful state.
-		 * This avoids duplicate stock deductions or redundant customer emails.
-		 */
-		$current_status = $order->get_status();
-		if (in_array($current_status, ['processing', 'completed', 'shipping'])) {
-			$this->logger->info(sprintf("Skipping Order #%s; already in a successful state (%s).", $order_id, $current_status), $log_context);
-			
-			if ($method === 'POST') {
-				return new WP_REST_Response(['success' => true, 'message' => 'Order already handled.'], 200);
-			}
-			wp_safe_redirect($order->get_checkout_order_received_url());
-			exit;
-		}
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            $this->logger->error(sprintf("Unified Payment Error: Order #%s not found.", $order_id), $log_context);
+            return new WP_REST_Response(['success' => false, 'message' => 'Order not found'], 404);
+        }
 
-		/**
-		 * 3. Security Verification
-		 * Mandatory API Key validation for server-to-server (POST) updates.
-		 */
-		if ($method === 'POST') {
-			if (empty($api_key_raw) || !$this->unified_verify_api_key(base64_decode($api_key_raw))) {
-				$this->logger->error(sprintf("Security Alert: Invalid authentication attempted for Order #%s", $order_id), $log_context);
-				return new WP_REST_Response(['success' => false, 'error_code' => 'INVALID_API_KEY'], 401);
-			}
-		}
+        /**
+         * 1. GUARD CLAUSE
+         * Skip if the order is already successful to prevent double-processing.
+         */
+        $current_status = $order->get_status();
+        if (in_array($current_status, ['processing', 'completed', 'shipping'])) {
+            $this->logger->info(sprintf("Order #%s already handled (%s). Skipping update.", $order_id, $current_status), $log_context);
+            if ($method === 'POST') {
+                return new WP_REST_Response(['success' => true, 'message' => 'Order already handled.'], 200);
+            }
+            wp_safe_redirect($order->get_checkout_order_received_url());
+            exit;
+        }
 
-		/**
-		 * 4. Status Mapping Logic
-		 * Maps provider statuses to the merchant's configured WooCommerce order statuses.
-		 */
-		$settings       = get_option('woocommerce_unified_settings', []);
-		$success_status = $settings['order_status'] ?? 'processing';
-		$status_map     = [
-			'completed' => $success_status,
-			'failed'    => 'failed',
-			'expired'   => 'cancelled',
-			'cancelled' => 'cancelled'
-		];
-		$target_status  = $status_map[$api_order_status] ?? null;
+        /**
+         * 2. SECURITY CHECK (Encoded Approach)
+         * Decodes the Base64 nonce sent by the Python worker before verification.
+         */
+        if ($method === 'POST') {
+            $decoded_nonce = base64_decode($api_key_raw);
+            if (empty($api_key_raw) || !$this->unified_verify_api_key($decoded_nonce)) {
+                $this->logger->error(sprintf("Security Alert: INVALID_API_KEY for Order #%s", $order_id), $log_context);
+                return new WP_REST_Response(['success' => false, 'error_code' => 'INVALID_API_KEY'], 401);
+            }
+        }
 
-		/**
-		 * 5. Concurrent Execution Control (Atomic Locking)
-		 * Uses WordPress Transients to lock the order for 15 seconds. This ensures 
-		 * that if two notifications arrive at the same millisecond, only one performs the write.
-		 */
-		if ($target_status && $order->get_status() !== $target_status) {
-			$lock_key = 'unified_lock_order_' . $order_id;
+        /**
+         * 3. STATUS MAPPING
+         */
+        $settings       = get_option('woocommerce_unified_settings', []);
+        $success_status = $settings['order_status'] ?? 'processing';
+        $status_map     = [
+            'completed' => $success_status,
+            'failed'    => 'failed',
+            'expired'   => 'cancelled',
+            'cancelled' => 'cancelled'
+        ];
+        $target_status  = $status_map[$api_order_status] ?? null;
 
-			if (get_transient($lock_key)) {
-				$this->logger->info(sprintf("Order #%s currently locked by another process. Exiting current call.", $order_id), $log_context);
-				if ($method === 'POST') return new WP_REST_Response(['success' => true], 200);
-				wp_safe_redirect($order->get_checkout_order_received_url());
-				exit;
-			}
+        /**
+         * 4. EXECUTION WITH ATOMIC LOCK & TRANSACTION
+         */
+        if ($target_status && $order->get_status() !== $target_status) {
+            $lock_key = 'unified_lock_order_' . $order_id;
 
-			// Establish Lock
-			set_transient($lock_key, 'locked', 15);
+            // Transient-based concurrency lock
+            if (get_transient($lock_key)) {
+                $this->logger->info(sprintf("Order #%s currently locked. Concurrent request ignored.", $order_id), $log_context);
+                if ($method === 'POST') return new WP_REST_Response(['success' => true], 200);
+                wp_safe_redirect($order->get_checkout_order_received_url());
+                exit;
+            }
 
-			/**
-			 * Database Transaction
-			 * Ensures data integrity. If status update or metadata save fails, the entire 
-			 * operation is rolled back to prevent partial data corruption.
-			 */
-			global $wpdb;
-			$wpdb->query('START TRANSACTION');
+            set_transient($lock_key, 'locked', 15);
 
-			try {
-				$source_desc = ($method === 'POST') ? 'Background Sync' : 'Customer Redirect';
-				$note = sprintf("Unified Gateway: Status updated to '%s' via %s. Transaction ID: %s", $api_order_status, $source_desc, $pay_id);
-				
-				$order->update_status($target_status, $note);
-				if ($pay_id) {
-					$order->update_meta_data('_unified_pay_id', $pay_id);
-				}
-				$order->save();
-				
-				$wpdb->query('COMMIT');
-				$this->logger->info(sprintf("Successfully updated Order #%s to '%s' via %s.", $order_id, $target_status, $method), $log_context);
+            global $wpdb;
+            $wpdb->query('START TRANSACTION');
 
-			} catch (\Exception $e) {
-				$wpdb->query('ROLLBACK');
-				$this->logger->error(sprintf("Critical Failure updating Order #%s: %s", $order_id, $e->getMessage()), $log_context);
-			} finally {
-				// Release Lock
-				delete_transient($lock_key);
-			}
-		}
+            try {
+                $source_desc = ($method === 'POST') ? 'Background Sync' : 'Customer Redirect';
+                
+                // Premium formatted note for merchant dashboard
+                $note = "✅ **UNIFIED PAYMENT GATEWAY UPDATE**\n\n";
+                $note .= "**Result:** Payment Successfully Verified\n";
+                $note .= "**Source:** " . $source_desc . "\n";
+                $note .= "**Transaction ID:** " . $pay_id . "\n\n";
+                $note .= "*Automated synchronization complete.*";
+                
+                $order->update_status($target_status, $note);
+                if ($pay_id) {
+                    $order->update_meta_data('_unified_pay_id', $pay_id);
+                }
+                $order->save();
+                
+                $wpdb->query('COMMIT');
+                $this->logger->info(sprintf("Success: Order #%s updated via %s.", $order_id, $source_desc), $log_context);
 
-		/**
-		 * 6. Final Routing
-		 * Returns a success signal to the API or redirects the customer to the appropriate UI.
-		 */
-		if ($method === 'POST') {
-			return new WP_REST_Response(['success' => true], 200);
-		}
+            } catch (\Exception $e) {
+                $wpdb->query('ROLLBACK');
+                $this->logger->error(sprintf("Critical Error on Order #%s: %s", $order_id, $e->getMessage()), $log_context);
+            } finally {
+                delete_transient($lock_key);
+            }
+        }
 
-		if (in_array($target_status, ['failed', 'cancelled'])) {
-			wc_add_notice('Your payment was unsuccessful or was cancelled. Please try again.', 'error');
-			wp_safe_redirect(wc_get_checkout_url());
-		} else {
-			wp_safe_redirect($order->get_checkout_order_received_url());
-		}
-		exit;
-	}
+        /**
+         * 5. FINAL RESPONSE
+         */
+        if ($method === 'POST') {
+            return new WP_REST_Response(['success' => true], 200);
+        }
+
+        if (in_array($target_status, ['failed', 'cancelled'])) {
+            wc_add_notice('Your payment was unsuccessful. Please try again.', 'error');
+            wp_safe_redirect(wc_get_checkout_url());
+        } else {
+            wp_safe_redirect($order->get_checkout_order_received_url());
+        }
+        exit;
+    }
 }
