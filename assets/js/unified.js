@@ -411,7 +411,6 @@ jQuery(function ($) {
             if (!response || !response.data) return;
 
             const status = response.data.status;
-
             // 🔴 Handle cancelled
             if (status === 'cancelled' || status === 'canceled') {
 
@@ -419,10 +418,10 @@ jQuery(function ($) {
 
                 clearInterval(cancelStatusInterval);
 
-                // Redirect main window
-                if (response.data.redirect_url) {
-                    window.location.href = response.data.redirect_url;
-                }
+                // // Redirect main window
+                // if (response.data.redirect_url) {
+                //     window.location.href = response.data.redirect_url;
+                // }
 
                 // Close popup safely
                 if (popupWindow && !popupWindow.closed) {
