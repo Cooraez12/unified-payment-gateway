@@ -6,6 +6,8 @@ jQuery(function ($) {
     var $button;
     var originalButtonText;
     let popupWindow = null;
+    let cancelStatusInterval = null;
+    let isCancelledHandled = false;
 
 
     /**
@@ -391,6 +393,46 @@ jQuery(function ($) {
             }
         }, 500);
     }
+
+    cancelStatusInterval = setInterval(function () {
+
+        // 🚫 Skip if already handled
+        if (isCancelledHandled) return;
+
+        // 🚫 Skip if popup is closed
+        if (!popupWindow || popupWindow.closed) return;
+
+        $.post(unified_params.ajax_url, {
+            action: 'unified_popup_closed_event',
+            order_id: orderId,
+            security: unified_params.unified_nonce
+        }, function (response) {
+
+            if (!response || !response.data) return;
+
+            const status = response.data.status;
+
+            // 🔴 Handle cancelled
+            if (status === 'cancelled' || status === 'canceled') {
+
+                isCancelledHandled = true;
+
+                clearInterval(cancelStatusInterval);
+
+                // Redirect main window
+                if (response.data.redirect_url) {
+                    window.location.href = response.data.redirect_url;
+                }
+
+                // Close popup safely
+                if (popupWindow && !popupWindow.closed) {
+                    popupWindow.close();
+                }
+            }
+
+        }, 'json');
+
+    }, 5000);
 
     function handleResponse(response, $form) {
         $('.wc_er').remove();
