@@ -484,7 +484,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 			]);
 
 			// Ensure the response contains the expected data
-			if (!isset($response_data['payment_status'])) {
+			if (!isset($response_data['transaction_status'])) {
 				wp_send_json_error(['message' => 'Invalid response from Unified API.']);
 				wp_die();
 			}
@@ -509,9 +509,9 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 
 			$payment_return_url = $order->get_checkout_order_received_url();
 			wc_clear_notices();
-			if (isset($response_data['payment_status'])) {
+			if (isset($response_data['transaction_status'])) {
 				// Handle transaction status from API
-				switch ($response_data['payment_status']) {
+				switch ($response_data['transaction_status']) {
 					case 'success':
 					case 'paid':
 					case 'processing':
@@ -543,7 +543,7 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 							}
 							wc_add_notice( 'Payment Canceled: The Payment method canceled your transaction.', 'error' );
 							$order->update_status('cancelled', 'Order marked as canceled by Unified.');
-							wp_send_json_success(['message' => 'Order status updated to canceled.', 'order_id' => $order_id, 'redirect_url' => $order->get_cancel_order_url(),'notices' => 'Payment Canceled: The payment was canceled. Please try again if you wish to complete your purchase.']);
+							wp_send_json_success(['status' => $response_data['transaction_status'],'message' => 'Order status updated to canceled.', 'order_id' => $order_id, 'redirect_url' => $order->get_cancel_order_url(),'notices' => 'Payment Canceled: The payment was canceled. Please try again if you wish to complete your purchase.']);
 						} catch (Exception $e) {
 							wp_send_json_error(['message' => 'Failed to update order status: ' . $e->getMessage()]);
 						}
