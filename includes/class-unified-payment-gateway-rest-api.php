@@ -228,7 +228,7 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 		// -------------------------
 		// 6. SUCCESS OVERRIDE (IMPORTANT FIX)
 		// -------------------------
-		if ($wc_status === 'processing' || $wc_status === 'completed') {
+		if (in_array($wc_status, ['processing', 'completed'], true) && $order->get_meta('_unified_payment_success') === 'yes') {
 			$state = 'success';
 		}
 

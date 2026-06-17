@@ -51,16 +51,16 @@ add_filter('woocommerce_get_checkout_order_received_url', function($url, $order)
         return $url;
     }
 
-	// Only police Unified orders
-	if ($order->get_payment_method() !== 'unified') {
-		return $url;
-	}
+    // Only police Unified orders
+    if ($order->get_payment_method() !== 'unified') {
+        return $url;
+    }
 
 	$wc_status    = $order->get_status();
 	$engine_state = $order->get_meta('_unified_state');
 	$success_meta = $order->get_meta('_unified_payment_success');
-
-	Unified_Payment_Gateway_Logger::info(
+	
+	Unified_Payment_Gateway_Logger::info(	
 		sprintf(
 			"[Order #%d] ThankYou Filter | WC=%s | Engine=%s | Success=%s",
 			$order->get_id(),
@@ -70,19 +70,20 @@ add_filter('woocommerce_get_checkout_order_received_url', function($url, $order)
 		)
 	);
 
-	$is_valid = in_array($wc_status, ['processing', 'completed'], true) && $success_meta === 'yes';
+    $is_valid =	in_array($wc_status, ['processing', 'completed'], true) && $success_meta === 'yes';
+
 	if (!$is_valid) {
 		Unified_Payment_Gateway_Logger::info(
 			sprintf(
 				'[Order #%d] ThankYou Filter BLOCKED -> %s',
 				$order->get_id(),
 				wc_get_checkout_url()
-			)
-		);
+				)
+			);
 		return wc_get_checkout_url();
 	}
 
-	Unified_Payment_Gateway_Logger::info(
+   	Unified_Payment_Gateway_Logger::info(
 		sprintf(
 			'[Order #%d] ThankYou Filter ALLOWED -> %s',
 			$order->get_id(),

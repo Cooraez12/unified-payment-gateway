@@ -8,7 +8,7 @@ The Unified Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fia
 **Tags:** woocommerce, payment gateway, fiat, Unified  
 **Requires at least:** 6.2  
 **Tested up to:** 6.9  
-**Stable tag:** 1.0.0 
+**Stable tag:** 1.0.0  
 **License:** GPLv3 or later  
 **License URI:** [GPLv3 License](https://www.gnu.org/licenses/gpl-3.0.html)
 
