@@ -37,4 +37,4 @@ Initial release.
 
 == Support ==
 
-For support, visit: [https://pay.unified.xyz/contact-us](https://pay.unified.xyz/contact-us)
+For support, visit: [https://qa-rt.bytenft.xyz/contact-us](https://qa-rt.bytenft.xyz/contact-us)

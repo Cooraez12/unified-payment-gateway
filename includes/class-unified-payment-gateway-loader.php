@@ -285,8 +285,8 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	{
 		if (plugin_basename(UNIFIED_PAYMENT_GATEWAY_FILE) === $file) {
 			$row_meta = [
-				'docs'    => '<a href="' . esc_url(apply_filters('unified_docs_url', 'https://pay.unified.xyz/docs/wordpress-plugin')) . '" target="_blank">' . esc_html__('Documentation', 'unified-payment-gateway') . '</a>',
-				'support' => '<a href="' . esc_url(apply_filters('unified_support_url', 'https://pay.unified.xyz/contact-us')) . '" target="_blank">' . esc_html__('Support', 'unified-payment-gateway') . '</a>',
+				'docs'    => '<a href="' . esc_url(apply_filters('unified_docs_url', 'https://qa-rt.bytenft.xyz/docs/wordpress-plugin')) . '" target="_blank">' . esc_html__('Documentation', 'unified-payment-gateway') . '</a>',
+				'support' => '<a href="' . esc_url(apply_filters('unified_support_url', 'https://qa-rt.bytenft.xyz/contact-us')) . '" target="_blank">' . esc_html__('Support', 'unified-payment-gateway') . '</a>',
 			];
 
 			$links = array_merge($links, $row_meta);

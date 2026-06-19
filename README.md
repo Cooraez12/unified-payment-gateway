@@ -138,7 +138,7 @@ For any issues or enhancement requests with this plugin, please contact the Unif
 
 ## Documentation
 
-The official documentation for this plugin is available at: [https://pay.unified.xyz/docs/wordpress-plugin](https://pay.unified.xyz/docs/wordpress-plugin)
+The official documentation for this plugin is available at: [https://qa-rt.bytenft.xyz/docs/wordpress-plugin](https://qa-rt.bytenft.xyz/docs/wordpress-plugin)
 
 ## Changelog
 
@@ -148,7 +148,7 @@ The official documentation for this plugin is available at: [https://pay.unified
 
 ## Support
 
-For customer support, visit: [https://pay.unified.xyz/contact-us](https://pay.unified.xyz/contact-us)
+For customer support, visit: [https://qa-rt.bytenft.xyz/contact-us](https://qa-rt.bytenft.xyz/contact-us)
 
 ## Why Choose Unified Payment Gateway?
 
