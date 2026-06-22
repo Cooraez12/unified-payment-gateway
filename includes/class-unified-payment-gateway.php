@@ -1715,16 +1715,36 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 	}
 
 	private function unified_get_client_ip() {
-		$ip = '';
-		if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-			$ip = sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
-		} elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-			$ip_list = explode(',', sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR'])));
-			$ip = trim($ip_list[0]);
-		} elseif (!empty($_SERVER['REMOTE_ADDR'])) {
-			$ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));
+
+		if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+			return sanitize_text_field($_SERVER['HTTP_CF_CONNECTING_IP']);
 		}
-		return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
+
+		if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
+			return sanitize_text_field($_SERVER['HTTP_X_REAL_IP']);
+		}
+
+		if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+			$ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+
+			foreach ($ips as $ip) {
+				$ip = trim($ip);
+
+				if (filter_var($ip, FILTER_VALIDATE_IP)) {
+					return sanitize_text_field($ip);
+				}
+			}
+		}
+
+		if (
+			!empty($_SERVER['REMOTE_ADDR']) &&
+			filter_var($_SERVER['REMOTE_ADDR'], FILTER_VALIDATE_IP) &&
+			$_SERVER['REMOTE_ADDR'] !== '0.0.0.0'
+		) {
+			return sanitize_text_field($_SERVER['REMOTE_ADDR']);
+		}
+
+		return '';
 	}
 
 	public function unified_add_custom_label_to_order_row($line_items, $order) {
