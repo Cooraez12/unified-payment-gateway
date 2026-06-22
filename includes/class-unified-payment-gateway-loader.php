@@ -285,8 +285,8 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 	{
 		if (plugin_basename(UNIFIED_PAYMENT_GATEWAY_FILE) === $file) {
 			$row_meta = [
-				'docs'    => '<a href="' . esc_url(apply_filters('unified_docs_url', 'https://qa-rt.bytenft.xyz/docs/wordpress-plugin')) . '" target="_blank">' . esc_html__('Documentation', 'unified-payment-gateway') . '</a>',
-				'support' => '<a href="' . esc_url(apply_filters('unified_support_url', 'https://qa-rt.bytenft.xyz/contact-us')) . '" target="_blank">' . esc_html__('Support', 'unified-payment-gateway') . '</a>',
+				'docs'    => '<a href="' . esc_url(apply_filters('unified_docs_url', 'https://qa-rt.unified.xyz/docs/wordpress-plugin')) . '" target="_blank">' . esc_html__('Documentation', 'unified-payment-gateway') . '</a>',
+				'support' => '<a href="' . esc_url(apply_filters('unified_support_url', 'https://qa-rt.unified.xyz/contact-us')) . '" target="_blank">' . esc_html__('Support', 'unified-payment-gateway') . '</a>',
 			];
 
 			$links = array_merge($links, $row_meta);
@@ -690,7 +690,8 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		// -------------------------
 		$is_success = ($state === 'success');
 
-		if ($response_data['transaction_status'] && $response_data['transaction_status'] == 'processing') {
+		if ($state !== 'success' && !empty($response_data['transaction_status']) && $response_data['transaction_status'] === 'processing') {
+
 			$state = 'processing';
 		}
 		// -------------------------
@@ -957,5 +958,98 @@ class UNIFIED_PAYMENT_GATEWAY_Loader
 		}
 
 		wp_die(); // Always include this
+	}
+
+	public function unified_send_plugin_status($plugin_status, $gateway_loaded)
+	{
+		$accounts = get_option('woocommerce_unified_payment_gateway_accounts', []);
+		
+		if (is_string($accounts)) {
+			$unserialized = maybe_unserialize($accounts);
+			$accounts = is_array($unserialized) ? $unserialized : [];
+		}
+
+		if (empty($accounts) || !is_array($accounts)) {
+			return;
+		}
+
+		// Find first available public key
+		$public_key = '';
+
+		foreach ($accounts as $account) {
+			if (!empty($account['live_public_key'])) {
+				$public_key = $account['live_public_key'];
+				break;
+			}
+
+			if (!empty($account['sandbox_public_key'])) {
+				$public_key = $account['sandbox_public_key'];
+				break;
+			}
+		}
+
+		if (empty($public_key)) {
+			Unified_Payment_Gateway_Logger::error(
+				'Unable to send plugin status. No public key found.',
+				[
+					'source' => 'unified-payment-gateway',
+				]
+			);
+			return;
+		}
+
+		global $wp_version;
+
+		$body = [
+			'valid_accounts'         => $accounts,
+			'plugin_status'          => (int) $plugin_status,
+			'gateway_loaded'         => (int) $gateway_loaded,
+			'plugin_version'         => UNIFIED_PLUGIN_VERSION,
+			'wordpress_version'      => $wp_version,
+			'woocommerce_version'    => class_exists('WooCommerce') && function_exists('WC')
+				? WC()->version
+				: '',
+			'woocommerce_db_version' => get_option('woocommerce_db_version'),
+			'group_id'               => get_option('unified_group_id'),
+			'domain_name'            => wp_parse_url(home_url(), PHP_URL_HOST),
+		];
+
+		$response = wp_remote_post(
+			trailingslashit(UNIFIED_BASE_URL) . 'api/plugin/check/plugin',
+			[
+				'method'    => 'POST',
+				'timeout'   => 30,
+				'sslverify' => true,
+				'headers'   => [
+					'Authorization' => 'Bearer ' . sanitize_text_field($public_key),
+				],
+				'body'      => $body,
+			]
+		);
+
+		if (is_wp_error($response)) {
+			Unified_Payment_Gateway_Logger::error(
+				'Plugin status API call failed.',
+				[
+					'source'  => 'unified-payment-gateway',
+					'context' => [
+						'error' => $response->get_error_message(),
+					],
+				]
+			);
+			return;
+		}
+
+		Unified_Payment_Gateway_Logger::info(
+			'Plugin status updated successfully.',
+			[
+				'source'  => 'unified-payment-gateway',
+				'context' => [
+					'plugin_status'  => $plugin_status,
+					'gateway_loaded' => $gateway_loaded,
+					'response_code'  => wp_remote_retrieve_response_code($response),
+				],
+			]
+		);
 	}
 }

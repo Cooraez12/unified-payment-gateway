@@ -92,9 +92,9 @@ function unified_on_plugin_activate() {
 		unified_migrate_old_settings();
 	}
 
-	// Activate cron
 	if (class_exists('UNIFIED_PAYMENT_GATEWAY_Loader')) {
 		UNIFIED_PAYMENT_GATEWAY_Loader::get_instance()->activate_cron_job();
+		UNIFIED_PAYMENT_GATEWAY_Loader::get_instance()->unified_send_plugin_status(1, 0);
 	}
 }
 
@@ -102,6 +102,7 @@ function unified_on_plugin_deactivate() {
 	// Deactivate cron
 	if (class_exists('UNIFIED_PAYMENT_GATEWAY_Loader')) {
 		UNIFIED_PAYMENT_GATEWAY_Loader::get_instance()->deactivate_cron_job();
+		UNIFIED_PAYMENT_GATEWAY_Loader::get_instance()->unified_send_plugin_status(0, 0);
 	}
 }
 
