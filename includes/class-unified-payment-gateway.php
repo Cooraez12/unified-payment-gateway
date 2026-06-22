@@ -1346,6 +1346,13 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 
 				$api_url = esc_url($this->base_url . '/api/request-payment');
 
+				Unified_Payment_Gateway_Logger::info(
+					$log_prefix . ' Payment request data',
+					[
+						'payload'    => $data,
+					]
+				);
+
 				$response = wp_remote_post($api_url, [
 					'method'    => 'POST',
 					'timeout'   => 30,
