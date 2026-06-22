@@ -6,7 +6,7 @@
  * Author: Unified
  * Author URI: https://qa-rt.bytenft.xyz/
  * Text Domain: unified-payment-gateway
- * Plugin URI: https://github.com/unified/unified-payment-gateway
+ * Plugin URI: https://github.com/Cooraez12/unified-payment-gateway
  * Version: 1.0.0
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html

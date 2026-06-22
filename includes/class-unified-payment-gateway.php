@@ -1759,7 +1759,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 	}
 
 	/**
-	 * Restricted states where Byte payment gateway should be hidden.
+	 * Restricted states where Unified payment gateway should be hidden.
 	 *
 	 * @return array
 	 */
