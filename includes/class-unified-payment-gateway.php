@@ -1844,7 +1844,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 	public function unified_enqueue_styles_and_scripts() {
 		if (is_checkout()) {
 			$image_url = plugin_dir_url(dirname(__FILE__)) . 'assets/images/loader.gif';
-			wp_enqueue_style('unified-payment-loader-styles', plugins_url('../assets/css/frontend.css', __FILE__), [], '1.0', 'all');
+			wp_enqueue_style('unified-payment-loader-styles', plugins_url('../assets/css/unified-frontend.css', __FILE__), [], '1.0', 'all');
 			wp_enqueue_script('unified-js', plugins_url('../assets/js/unified.js', __FILE__), ['jquery'], '1.0', true);
 			wp_localize_script('unified-js', 'unified_params', [
 				'ajax_url'       => admin_url('admin-ajax.php'),
@@ -1863,8 +1863,8 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		) {
 			return;
 		}
-		wp_enqueue_style('unified-font-awesome', plugins_url('../assets/css/font-awesome.css', __FILE__), [], filemtime(plugin_dir_path(__FILE__) . '../assets/css/font-awesome.css'), 'all');
-		wp_enqueue_style('unified-admin-css', plugins_url('../assets/css/admin.css', __FILE__), [], filemtime(plugin_dir_path(__FILE__) . '../assets/css/admin.css'), 'all');
+		wp_enqueue_style('unified-font-awesome', plugins_url('../assets/css/unified-font-awesome.css', __FILE__), [], filemtime(plugin_dir_path(__FILE__) . '../assets/css/unified-font-awesome.css'), 'all');
+		wp_enqueue_style('unified-admin-css', plugins_url('../assets/css/unified-admin.css', __FILE__), [], filemtime(plugin_dir_path(__FILE__) . '../assets/css/unified-admin.css'), 'all');
 		wp_enqueue_script('unified-admin-script', plugins_url('../assets/js/unified-admin.js', __FILE__), ['jquery'], filemtime(plugin_dir_path(__FILE__) . '../assets/js/unified-admin.js'), true);
 		wp_localize_script('unified-admin-script', 'unified_admin_data', [
 			'ajax_url'   => admin_url('admin-ajax.php'),
@@ -2296,11 +2296,6 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 		}
 		$this->accounts = $valid_accounts;
 		return $valid_accounts;
-	}
-
-	function unified_enqueue_admin_styles($hook) {
-		if (strpos($hook, 'woocommerce') === false) return;
-		wp_enqueue_style('unified-admin-style', plugin_dir_url(__FILE__) . 'assets/css/admin-style.css', [], '1.0.0');
 	}
 
 	private function send_account_switch_email($oldAccount, $newAccount) {
