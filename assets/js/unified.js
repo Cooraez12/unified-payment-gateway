@@ -117,8 +117,11 @@
                         self.releaseLock('Classic');
                         self.setStatus('idle');
                         self.reset();
-                        self.showCheckoutError(validationError);
-                        return false;
+                        self.showCheckoutError(
+                            'Please correct the following errors:',
+                            validationError
+                        );
+                        return;
                     }
 
                     self.setStatus('popup');
@@ -236,7 +239,10 @@
                     self.releaseLock('Block');
                     self.setStatus('idle');
                     self.reset();
-                    self.showCheckoutError(validationError);
+                    self.showCheckoutError(
+                        'Please correct the following errors:',
+                        validationError
+                    );
                     return;
                 }
 
@@ -626,17 +632,41 @@
          * ========================================================= */
 
         validateAll: function ($form) {
+            const errors = [];
+
             const email = this.getBillingEmail($form);
-            if (!email) return 'Please enter your email address.';
-            if (!this.isValidEmail(email)) return 'Please enter a valid email address.';
+
+            const requiredFields = [
+                { value: this.getBillingFirstName($form), message: 'Please enter your first name.' },
+                { value: this.getBillingLastName($form), message: 'Please enter your last name.' },
+                { value: this.getBillingAddress1($form), message: 'Please enter your address.' },
+                { value: this.getBillingCity($form), message: 'Please enter your city.' },
+                { value: this.getBillingPostCode($form), message: 'Please enter your postal code.' }
+            ];
+
+            if (!email) {
+                errors.push('Please enter your email address.');
+            } else if (!this.isValidEmail(email)) {
+                errors.push('Please enter a valid email address.');
+            }
+
+            requiredFields.forEach(field => {
+                if (!field.value?.trim()) {
+                    errors.push(field.message);
+                }
+            });
 
             const phone = this.getPhoneNumber($form);
-            if (phone && !this.isValidPhoneNumber(phone)) return 'Please enter a valid phone number.';
+            if (phone && !this.isValidPhoneNumber(phone)) {
+                errors.push('Please enter a valid phone number.');
+            }
 
             const poBox = this.validatePOBox($form);
-            if (poBox) return poBox;
+            if (poBox) {
+                errors.push(poBox);
+            }
 
-            return null;
+            return errors.length ? errors : null;
         },
 
         validateRequiredFields: function ($form) {
@@ -773,26 +803,37 @@
             $('.unified-error-wrap, .woocommerce-notices-wrapper, .wcf-woocommerce-notices-wrapper').remove();
 
             let fieldsHtml = '';
-            if (fields.length) {
+
+            if (Array.isArray(fields) && fields.length) {
                 fieldsHtml = `
-                    <ul class="unified-error-fields" style="margin-top: 5px; padding-left: 20px;">
+                    <ul class="unified-error-fields" style="margin-top:5px;padding-left:20px;">
                         ${fields.map(field => `<li>${field}</li>`).join('')}
-                    </ul>`;
+                    </ul>
+                `;
             }
 
             const html = `
                 <div class="woocommerce-notices-wrapper wcf-woocommerce-notices-wrapper unified-error-wrap">
-                    <div class="woocommerce-error unified-error-box" role="alert" style="border-left: 3px solid #cc0000; padding: 1em; background: #fff1f1;">
-                        <div class="unified-error-header"><strong>${message}</strong></div>
+                    <div class="woocommerce-error unified-error-box" role="alert" style="border-left:3px solid #cc0000;padding:1em;background:#fff1f1;">
+                        <div class="unified-error-header">
+                            <strong>${message}</strong>
+                        </div>
                         ${fieldsHtml}
                     </div>
                 </div>`;
 
-            const targets = ['.wc-block-checkout__form', 'form.checkout', 'form#wcf-embed-checkout-form', '.wcf-embed-checkout-form-steps'];
+            const targets = [
+                '.wc-block-checkout__form',
+                'form.checkout',
+                'form#wcf-embed-checkout-form',
+                '.wcf-embed-checkout-form-steps'
+            ];
+
             let inserted = false;
 
             for (let target of targets) {
                 const $el = $(target);
+
                 if ($el.length) {
                     $el.prepend(html);
                     inserted = true;
@@ -815,6 +856,27 @@
         clearCheckoutErrors: function () {
             $('.woocommerce-notices-wrapper, .wcf-woocommerce-notices-wrapper, .woocommerce-error, .wc-block-components-notice-banner, .woocommerce-message, .woocommerce-info, .unified-error-wrap').remove();
         },
+
+        getBillingFirstName: function ($f) {
+            return $('body').find('#billing_first_name, #first_name, input[type="text"]').first().val();
+        },
+        
+        getBillingLastName: function ($f) {
+            return $('body').find('#billing_last_name, #last_name, input[type="text"]').first().val();
+        },
+        
+        getBillingCity: function ($f) {
+            return $('body').find('#billing_city, #city, input[type="text"]').first().val();
+        },
+
+        getBillingPostCode: function ($f) {
+            return $('body').find('#billing_postcode, #postcode, input[type="text"]').first().val();
+        },
+        
+        getBillingAddress1: function ($f) {
+            return $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val();
+        },
+       
 
         getBillingEmail: function ($f) {
             return $('body').find('#billing_email, #email, input[type="email"]').first().val();
