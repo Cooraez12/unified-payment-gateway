@@ -862,69 +862,82 @@
         },
 
         getBillingFirstName: function ($form) {
-            return (
-                $form.find('#billing_first_name').first().val() ||
-                $form.find('#billing-first_name').first().val() ||
-                $form.find('#shipping_first_name').first().val() ||
-                $form.find('#shipping-first_name').first().val() ||
-                $('body').find('#billing_first_name, #first_name, input[type="text"]').first().val() ||
-                ''
-            );
+            if ($form.find('#billing_first_name').first().val() && $form.find('#billing_first_name').first().val().trim() !== '') {
+                return $form.find('#billing_first_name').first().val();
+            } else if ($form.find('#billing-first_name').first().val() && $form.find('#billing-first_name').first().val().trim() !== '') {
+                return $form.find('#billing-first_name').first().val();
+            } else if ($form.find('#shipping_first_name').first().val() && $form.find('#shipping_first_name').first().val().trim() !== '') {
+                return $form.find('#shipping_first_name').first().val();
+            } else if ($form.find('#shipping-first_name').first().val() && $form.find('#shipping-first_name').first().val().trim() !== '') {
+                return $form.find('#shipping-first_name').first().val();
+            }
+            return $('body').find('#billing_first_name, #first_name, input[type="text"]').first().val() || '';
         },
 
         getBillingLastName: function ($form) {
-            return (
-                $form.find('#billing_last_name').first().val() ||
-                $form.find('#billing-last_name').first().val() ||
-                $form.find('#shipping_last_name').first().val() ||
-                $form.find('#shipping-last_name').first().val() ||
-                $('body').find('#billing_last_name, #last_name, input[type="text"]').first().val() ||
-                ''
-            );
+            if ($form.find('#billing_last_name').first().val() && $form.find('#billing_last_name').first().val().trim() !== '') {
+                return $form.find('#billing_last_name').first().val();
+            } else if ($form.find('#billing-last_name').first().val() && $form.find('#billing-last_name').first().val().trim() !== '') {
+                return $form.find('#billing-last_name').first().val();
+            } else if ($form.find('#shipping_last_name').first().val() && $form.find('#shipping_last_name').first().val().trim() !== '') {
+                return $form.find('#shipping_last_name').first().val();
+            } else if ($form.find('#shipping-last_name').first().val() && $form.find('#shipping-last_name').first().val().trim() !== '') {
+                return $form.find('#shipping-last_name').first().val();
+            }
+            return $('body').find('#billing_last_name, #last_name, input[type="text"]').first().val() || '';
         },
 
         getBillingAddress1: function ($form) {
-            return (
-                $form.find('#billing_address_1').first().val() ||
-                $form.find('#billing-address_1').first().val() ||
-                $form.find('#shipping_address_1').first().val() ||
-                $form.find('#shipping-address_1').first().val() ||
-                $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() ||
-                ''
-            );
+
+            if ($form.find('#billing_address_1').first().val() && $form.find('#billing_address_1').first().val().trim() !== '') {
+                return $form.find('#billing_address_1').first().val();
+            } else if ($form.find('#billing-address_1').first().val() && $form.find('#billing-address_1').first().val().trim() !== '') {
+                return $form.find('#billing-address_1').first().val();
+            } else if ($form.find('#shipping_address_1').first().val() && $form.find('#shipping_address_1').first().val().trim() !== '') {
+                return $form.find('#shipping_address_1').first().val();
+            } else if ($form.find('#shipping-address_1').first().val() && $form.find('#shipping-address_1').first().val().trim() !== '') {
+                return $form.find('#shipping-address_1').first().val();
+            }
+            return $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() || '';
         },
 
         getBillingCity: function ($form) {
-            return (
-                $form.find('#billing_city').first().val() ||
-                $form.find('#billing-city').first().val() ||
-                $form.find('#shipping_city').first().val() ||
-                $form.find('#shipping-city').first().val() ||
-                $('body').find('#billing_city, #city, input[type="text"]').first().val() ||
-                ''
-            );
+            if ($form.find('#billing_city').first().val() && $form.find('#billing_city').first().val().trim() !== '') {
+                return $form.find('#billing_city').first().val();
+            } else if ($form.find('#billing-city').first().val() && $form.find('#billing-city').first().val().trim() !== '') {
+                return $form.find('#billing-city').first().val();
+            }  else if ($form.find('#shipping_city').first().val() && $form.find('#shipping_city').first().val().trim() !== '') {
+                return $form.find('#shipping_city').first().val();
+            } else if ($form.find('#shipping-city').first().val() && $form.find('#shipping-city').first().val().trim() !== '') {
+                return $form.find('#shipping-city').first().val();
+            }
+            return $('body').find('#billing_city, #city, input[type="text"]').first().val() || '';
         },
 
         getBillingPostCode: function ($form) {
-            return (
-                $form.find('#billing_postcode').first().val() ||
-                $form.find('#billing-postcode').first().val() ||
-                $form.find('#shipping_postcode').first().val() ||
-                $form.find('#shipping-postcode').first().val() ||
-                $('body').find('#billing_postcode, #postcode, input[type="text"]').first().val() ||
-                ''
-            );
+            if ($form.find('#billing_postcode').first().val() && $form.find('#billing_postcode').first().val().trim() !== '') {
+                return $form.find('#billing_postcode').first().val();
+            } else if ($form.find('#billing-postcode').first().val() && $form.find('#billing-postcode').first().val().trim() !== '') {
+                return $form.find('#billing-postcode').first().val();
+            } else if ($form.find('#shipping_postcode').first().val() && $form.find('#shipping_postcode').first().val().trim() !== '') {
+                return $form.find('#shipping_postcode').first().val();
+            } else if ($form.find('#shipping-postcode').first().val() && $form.find('#shipping-postcode').first().val().trim() !== '') {
+                return $form.find('#shipping-postcode').first().val();
+            }
+            return $('body').find('#billing_postcode, #postcode, input[type="text"]').first().val() || '';
         },
 
         getBillingAddress1: function ($form) {
-            return (
-                $form.find('#billing_address_1').first().val() ||
-                $form.find('#billing-address-1').first().val() ||
-                $form.find('#shipping_address_1').first().val() ||
-                $form.find('#shipping-address-1').first().val() ||
-                $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() ||
-                ''
-            );
+            if ($form.find('#billing_address_1').first().val() && $form.find('#billing_address_1').first().val().trim() !== '') {
+                return $form.find('#billing_address_1').first().val();
+            } else if ($form.find('#billing-address-1').first().val() && $form.find('#billing-address-1').first().val().trim() !== '') {
+                return $form.find('#billing-address-1').first().val();
+            } else if ($form.find('#shipping_address_1').first().val() && $form.find('#shipping_address_1').first().val().trim() !== '') {
+                return $form.find('#shipping_address_1').first().val();
+            } else if ($form.find('#shipping-address-1').first().val() && $form.find('#shipping-address-1').first().val().trim() !== '') {
+                return $form.find('#shipping-address-1').first().val();
+            }
+            return $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() || '';
         },
 
         getBillingEmail: function ($f) {
