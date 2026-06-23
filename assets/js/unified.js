@@ -117,8 +117,11 @@
                         self.releaseLock('Classic');
                         self.setStatus('idle');
                         self.reset();
-                        self.showCheckoutError(validationError);
-                        return false;
+                        self.showCheckoutError(
+                            'Please correct the following errors:',
+                            validationError
+                        );
+                        return;
                     }
 
                     self.setStatus('popup');
@@ -236,7 +239,10 @@
                     self.releaseLock('Block');
                     self.setStatus('idle');
                     self.reset();
-                    self.showCheckoutError(validationError);
+                    self.showCheckoutError(
+                        'Please correct the following errors:',
+                        validationError
+                    );
                     return;
                 }
 
@@ -626,17 +632,55 @@
          * ========================================================= */
 
         validateAll: function ($form) {
+            const errors = [];
+
             const email = this.getBillingEmail($form);
-            if (!email) return 'Please enter your email address.';
-            if (!this.isValidEmail(email)) return 'Please enter a valid email address.';
+
+            if (!email) {
+                errors.push('Please enter your email address.');
+            } else if (!this.isValidEmail(email)) {
+                errors.push('Please enter a valid email address.');
+            }
+
+            if (!this.getBillingFirstName($form)?.trim()) {
+                errors.push('Please enter your first name.');
+            } else if (this.getBillingFirstName($form).length < 3) {
+                errors.push('First name must contain at least 3 characters.');
+            }
+
+            if (!this.getBillingLastName($form)?.trim()) {
+                errors.push('Please enter your last name.');
+            } else if (this.getBillingLastName($form).length < 3) {
+                errors.push('Last name must contain at least 3 characters.');
+            }
+
+            if (!this.getBillingAddress1($form)?.trim()) {
+                errors.push('Please enter your address.');
+            } else if (this.getBillingAddress1($form).length < 5) {
+                errors.push('Address must contain at least 5 characters.');
+            }
+
+            if (!this.getBillingCity($form)?.trim()) {
+                errors.push('Please enter your city.');
+            } else if (this.getBillingCity($form).length < 2) {
+                errors.push('City must contain at least 2 characters.');
+            }
+
+            if (!this.getBillingPostCode($form)?.trim()) {
+                errors.push('Please enter your postal code.');
+            }
 
             const phone = this.getPhoneNumber($form);
-            if (phone && !this.isValidPhoneNumber(phone)) return 'Please enter a valid phone number.';
+            if (phone && !this.isValidPhoneNumber(phone)) {
+                errors.push('Please enter a valid phone number.');
+            }
 
             const poBox = this.validatePOBox($form);
-            if (poBox) return poBox;
+            if (poBox) {
+                errors.push(poBox);
+            }
 
-            return null;
+            return errors.length > 0 ? errors : null;
         },
 
         validateRequiredFields: function ($form) {
@@ -773,7 +817,8 @@
             $('.unified-error-wrap, .woocommerce-notices-wrapper, .wcf-woocommerce-notices-wrapper').remove();
 
             let fieldsHtml = '';
-            if (fields.length) {
+
+            if (Array.isArray(fields) && fields.length) {
                 fieldsHtml = `
                     <ul class="unified-error-fields" style="margin-top: 5px; padding-left: 20px;">
                         ${fields.map(field => `<li>${field}</li>`).join('')}
@@ -782,7 +827,7 @@
 
             const html = `
                 <div class="woocommerce-notices-wrapper wcf-woocommerce-notices-wrapper unified-error-wrap">
-                    <div class="woocommerce-error unified-error-box" role="alert" style="border-left: 3px solid #cc0000; padding: 1em; background: #fff1f1;">
+                    <div class="woocommerce-error unified-error-box" role="alert" style="border-left:3px solid #cc0000;padding:1em;background:#fff1f1;">
                         <div class="unified-error-header"><strong>${message}</strong></div>
                         ${fieldsHtml}
                     </div>
@@ -814,6 +859,72 @@
 
         clearCheckoutErrors: function () {
             $('.woocommerce-notices-wrapper, .wcf-woocommerce-notices-wrapper, .woocommerce-error, .wc-block-components-notice-banner, .woocommerce-message, .woocommerce-info, .unified-error-wrap').remove();
+        },
+
+        getBillingFirstName: function ($form) {
+            return (
+                $form.find('#billing_first_name').first().val() ||
+                $form.find('#billing-first_name').first().val() ||
+                $form.find('#shipping_first_name').first().val() ||
+                $form.find('#shipping-first_name').first().val() ||
+                $('body').find('#billing_first_name, #first_name, input[type="text"]').first().val() ||
+                ''
+            );
+        },
+
+        getBillingLastName: function ($form) {
+            return (
+                $form.find('#billing_last_name').first().val() ||
+                $form.find('#billing-last_name').first().val() ||
+                $form.find('#shipping_last_name').first().val() ||
+                $form.find('#shipping-last_name').first().val() ||
+                $('body').find('#billing_last_name, #last_name, input[type="text"]').first().val() ||
+                ''
+            );
+        },
+
+        getBillingAddress1: function ($form) {
+            return (
+                $form.find('#billing_address_1').first().val() ||
+                $form.find('#billing-address_1').first().val() ||
+                $form.find('#shipping_address_1').first().val() ||
+                $form.find('#shipping-address_1').first().val() ||
+                $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() ||
+                ''
+            );
+        },
+
+        getBillingCity: function ($form) {
+            return (
+                $form.find('#billing_city').first().val() ||
+                $form.find('#billing-city').first().val() ||
+                $form.find('#shipping_city').first().val() ||
+                $form.find('#shipping-city').first().val() ||
+                $('body').find('#billing_city, #city, input[type="text"]').first().val() ||
+                ''
+            );
+        },
+
+        getBillingPostCode: function ($form) {
+            return (
+                $form.find('#billing_postcode').first().val() ||
+                $form.find('#billing-postcode').first().val() ||
+                $form.find('#shipping_postcode').first().val() ||
+                $form.find('#shipping-postcode').first().val() ||
+                $('body').find('#billing_postcode, #postcode, input[type="text"]').first().val() ||
+                ''
+            );
+        },
+
+        getBillingAddress1: function ($form) {
+            return (
+                $form.find('#billing_address_1').first().val() ||
+                $form.find('#billing-address-1').first().val() ||
+                $form.find('#shipping_address_1').first().val() ||
+                $form.find('#shipping-address-1').first().val() ||
+                $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() ||
+                ''
+            );
         },
 
         getBillingEmail: function ($f) {
