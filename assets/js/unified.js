@@ -656,8 +656,6 @@
 
             if (!this.getBillingAddress1($form)?.trim()) {
                 errors.push('Please enter your address.');
-            } else if (this.getBillingAddress1($form).length < 5) {
-                errors.push('Address must contain at least 5 characters.');
             }
 
             if (!this.getBillingCity($form)?.trim()) {
@@ -885,20 +883,6 @@
                 return $form.find('#shipping-last_name').first().val();
             }
             return $('body').find('#billing_last_name, #last_name, input[type="text"]').first().val() || '';
-        },
-
-        getBillingAddress1: function ($form) {
-
-            if ($form.find('#billing_address_1').first().val() && $form.find('#billing_address_1').first().val().trim() !== '') {
-                return $form.find('#billing_address_1').first().val();
-            } else if ($form.find('#billing-address_1').first().val() && $form.find('#billing-address_1').first().val().trim() !== '') {
-                return $form.find('#billing-address_1').first().val();
-            } else if ($form.find('#shipping_address_1').first().val() && $form.find('#shipping_address_1').first().val().trim() !== '') {
-                return $form.find('#shipping_address_1').first().val();
-            } else if ($form.find('#shipping-address_1').first().val() && $form.find('#shipping-address_1').first().val().trim() !== '') {
-                return $form.find('#shipping-address_1').first().val();
-            }
-            return $('body').find('#billing_address_1, #address_1, input[type="text"]').first().val() || '';
         },
 
         getBillingCity: function ($form) {
