@@ -7,7 +7,7 @@ if (!defined('UNIFIED_PROTOCOL')) {
 }
 
 if (!defined('UNIFIED_HOST')) {
-    define('UNIFIED_HOST', 'qa-rt.bytenft.xyz');
+    define('UNIFIED_HOST', 'rt.app');
 }
 
 if (!defined('UNIFIED_BASE_URL')) {
