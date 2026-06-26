@@ -37,4 +37,4 @@ Initial release.
 
 == Support ==
 
-For support, visit: [https://qa-rt.bytenft.xyz/contact-us](https://qa-rt.bytenft.xyz/contact-us)
+For support, visit: [https://rt.app/contact-us](https://rt.app/contact-us)

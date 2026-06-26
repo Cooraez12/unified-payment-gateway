@@ -4,7 +4,7 @@
  * Plugin Name: Unified Payment Gateway
  * Description: Use a Credit Card, Debit Card or Google Pay, Apple Pay to complete your purchase via USDC. The transaction will appear on your bank or card statement as *Unified.
  * Author: Unified
- * Author URI: https://qa-rt.bytenft.xyz/
+ * Author URI: https://rt.app/
  * Text Domain: unified-payment-gateway
  * Plugin URI: https://github.com/Cooraez12/unified-payment-gateway
  * Version: 1.0.0
