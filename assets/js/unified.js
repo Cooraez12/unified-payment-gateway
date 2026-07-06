@@ -922,6 +922,10 @@
                 return value;
             }
 
+            if ((value = $form.find('#shipping_address_1').first().val()) && value.trim() !== '') {
+                return value;
+            }
+
             if ((value = $form.find('#billing_address_1').first().val()) && value.trim() !== '') {
                 return value;
             }
@@ -929,7 +933,10 @@
             if ((value = $form.find('#billing-address-1').first().val()) && value.trim() !== '') {
                 return value;
             }
-
+            
+            if ((value = $form.find('#billing-address_1').first().val()) && value.trim() !== '') {
+                return value;
+            }
             return $('body').find('#shipping-address_1, #address_1, input[type="text"]').first().val() || '';
         },
 
