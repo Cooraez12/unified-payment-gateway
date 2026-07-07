@@ -667,13 +667,15 @@
             const postalCode = this.getBillingPostCode($form);
             if (!postalCode?.trim()) {
                 errors.push('Please enter your postal code.');
-            } else if (!/^\d+$/.test(postalCode)) {
-                errors.push('Postal code must contain numbers only.');
+            } else if (this.getBillingPostCode($form).length < 5) {
+                errors.push('Postal code must contain at least 5 characters.');
             }
 
             const phone = this.getPhoneNumber($form);
             if (phone && !this.isValidPhoneNumber(phone)) {
                 errors.push('Please enter a valid phone number.');
+            } else if (phone && phone.length < 10) {
+                errors.push('Phone number must contain at least 10 digits.');
             }
 
             const poBox = this.validatePOBox($form);
@@ -751,7 +753,7 @@
             const isShippingActive = this.getShippingState($form);
             const $root = $('body');
             
-            const billing1 = $root.find('[name="billing_address_1"]').val();
+            const billing1 = this.getBillingAddress1($form);
             const billing2 = $root.find('[name="billing_address_2"]').val();
             
             if (this.containsPOBox(billing1) || this.containsPOBox(billing2)) {
