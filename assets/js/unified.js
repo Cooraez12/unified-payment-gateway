@@ -764,7 +764,7 @@
             const isShippingActive = this.getShippingState($form);
             const $root = $('body');
             
-            const billing1 = $root.find('[name="billing_address_1"]').val();
+            const billing1 = this.getBillingAddress1($form);
             const billing2 = $root.find('[name="billing_address_2"]').val();
             
             if (this.containsPOBox(billing1) || this.containsPOBox(billing2)) {

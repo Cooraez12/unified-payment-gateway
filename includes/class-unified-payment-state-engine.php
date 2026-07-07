@@ -429,7 +429,7 @@ class UNIFIED_PAYMENT_ENGINE
         $map = [
             'pending' => ['processing','cancelled','success','failed'],
             'failed' => ['failed','success','processing','cancelled'],
-            'cancelled' => ['success'],
+            'cancelled' => ['success','failed'],
             'expired' => ['failed','cancelled','success'],
             'processing' => ['success', 'failed', 'cancelled', 'expired'],
         ];
