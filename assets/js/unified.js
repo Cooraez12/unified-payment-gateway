@@ -666,11 +666,15 @@
 
             if (!this.getBillingPostCode($form)?.trim()) {
                 errors.push('Please enter your postal code.');
+            } else if (this.getBillingPostCode($form).length < 5) {
+                errors.push('Postal code must contain at least 5 characters.');
             }
 
             const phone = this.getPhoneNumber($form);
             if (phone && !this.isValidPhoneNumber(phone)) {
                 errors.push('Please enter a valid phone number.');
+            } else if (phone && phone.length < 10) {
+                errors.push('Phone number must contain at least 10 digits.');
             }
 
             const poBox = this.validatePOBox($form);
