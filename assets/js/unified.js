@@ -664,17 +664,29 @@
                 errors.push('City must contain at least 2 characters.');
             }
 
-            if (!this.getBillingPostCode($form)?.trim()) {
+            const postcode = this.getBillingPostCode($form);
+            if (!postcode || !postcode.trim()) {
                 errors.push('Please enter your postal code.');
-            } else if (this.getBillingPostCode($form).length < 5) {
-                errors.push('Postal code must contain at least 5 characters.');
+            } else if (postcode.trim().length < 3) {
+                errors.push('Postal code must contain at least 3 characters.');
+            } else if (postcode.trim().length > 10) {
+                errors.push('Postal code cannot exceed 10 characters.');
+            } else if (!this.isValidPostCode(postcode.trim())) {
+                errors.push('Please enter a valid postal code.');
             }
 
             const phone = this.getPhoneNumber($form);
-            if (phone && !this.isValidPhoneNumber(phone)) {
-                errors.push('Please enter a valid phone number.');
-            } else if (phone && phone.length < 10) {
-                errors.push('Phone number must contain at least 10 digits.');
+            if (phone && phone.trim()) {
+                const cleanedPhone = phone.replace(/[\s\-().]/g, '');
+                if (/[a-zA-Z]/.test(phone)) {
+                    errors.push('Phone number cannot contain letters.');
+                } else if (cleanedPhone.length < 10) {
+                    errors.push('Phone number must contain at least 10 digits.');
+                } else if (cleanedPhone.length > 15) {
+                    errors.push('Phone number cannot exceed 15 digits.');
+                } else if (!this.isValidPhoneNumber(phone)) {
+                    errors.push('Please enter a valid phone number.');
+                }
             }
 
             const poBox = this.validatePOBox($form);
@@ -956,10 +968,24 @@
             return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
         },
 
-        isValidPhoneNumber: function (p) {
-            if (!p) return true;
-            const cleaned = p.replace(/[\s\-().]/g, '');
-            return (/^(\+1|1)?\d{10}$/.test(cleaned) || /^(\+|00)[1-9]\d{6,14}$/.test(cleaned) || /^\+?\d{5,15}$/.test(cleaned));
+        isValidPostCode: function (postcode) {
+            if (!postcode) {
+                return false;
+            }
+
+            postcode = postcode.trim();
+
+            // Allow only letters, numbers and spaces
+            return /^[A-Za-z0-9 ]+$/.test(postcode);
+        },
+
+        isValidPhoneNumber: function (phone) {
+            if (!phone) return true;
+
+            const cleaned = phone.replace(/[\s\-().]/g, '');
+
+            // Allow only digits with an optional leading +
+            return /^\+?\d+$/.test(cleaned);
         },
 
         bindInputSanitization: function () {
