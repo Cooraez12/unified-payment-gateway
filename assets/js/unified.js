@@ -667,8 +667,8 @@
             const postcode = this.getBillingPostCode($form);
             if (!postcode || !postcode.trim()) {
                 errors.push('Please enter your postal code.');
-            } else if (postcode.trim().length < 3) {
-                errors.push('Postal code must contain at least 3 characters.');
+            } else if (postcode.trim().length < 5) {
+                errors.push('Postal code must contain at least 5 characters.');
             } else if (postcode.trim().length > 10) {
                 errors.push('Postal code cannot exceed 10 characters.');
             } else if (!this.isValidPostCode(postcode.trim())) {
