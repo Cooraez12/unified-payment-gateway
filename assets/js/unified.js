@@ -664,7 +664,8 @@
                 errors.push('City must contain at least 2 characters.');
             }
 
-            if (!this.getBillingPostCode($form)?.trim()) {
+            const postalCode = this.getBillingPostCode($form);
+            if (!postalCode?.trim()) {
                 errors.push('Please enter your postal code.');
             } else if (this.getBillingPostCode($form).length < 5) {
                 errors.push('Postal code must contain at least 5 characters.');
@@ -985,6 +986,17 @@
                 '#billing_address_1, #shipping_address_1',
                 function () {
                     this.value = this.value.replace(/[^A-Za-z0-9\s,.\-#]/g, '');
+                }
+            );
+
+            $(document).off(
+                'input',
+                '#billing_postcode, #shipping_postcode, input[name="billing_postcode"], input[name="shipping_postcode"]'
+            ).on(
+                'input',
+                '#billing_postcode, #shipping_postcode, input[name="billing_postcode"], input[name="shipping_postcode"]',
+                function () {
+                    this.value = this.value.replace(/\D/g, '');
                 }
             );
         }
