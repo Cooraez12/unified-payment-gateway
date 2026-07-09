@@ -7,7 +7,7 @@
  * Author URI: https://rt.app/
  * Text Domain: unified-payment-gateway
  * Plugin URI: https://github.com/Cooraez12/unified-payment-gateway
- * Version: 1.0.0
+ * Version: 1.0.1
  * License: GPLv3 or later
  * License URI: https://www.gnu.org/licenses/gpl-3.0.html
  *
