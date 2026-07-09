@@ -210,6 +210,7 @@ jQuery(document).ready(function ($) {
 			let prioritySet = new Set();   // For unique priority validation
 			let titleSet = new Set();      // For unique title validation
 			let hasErrors = false;
+			var sandboxEnabled = $('#woocommerce_'+gatewayId+'_sandbox').is(':checked'); // <-- Updated
 
 			function validateKeyUniqueness(inputField, keyValue, label) {
 				if (allKeys.has(keyValue)) {
@@ -297,6 +298,11 @@ jQuery(document).ready(function ($) {
 						showErrorMessage(sandboxSecretKey, "Sandbox Secret Key is required.");
 						hasErrors = true;
 					}
+				}
+				
+				if (sandboxEnabled && !sandboxRequired) {
+					showErrorMessage(liveSecretKey, "Sandbox Mode Enable : Sandbox Keys are required.");
+					hasErrors = true;
 				}
 
 				// Global uniqueness across keys
