@@ -15,5 +15,5 @@ if (!defined('UNIFIED_BASE_URL')) {
 }
 
 if (!defined('UNIFIED_PLUGIN_VERSION')) {
-    define('UNIFIED_PLUGIN_VERSION', '1.0.0');
+    define('UNIFIED_PLUGIN_VERSION', '1.0.1');
 }

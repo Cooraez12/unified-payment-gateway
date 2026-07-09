@@ -8,7 +8,7 @@ The Unified Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fia
 **Tags:** woocommerce, payment gateway, fiat, Unified  
 **Requires at least:** 6.2  
 **Tested up to:** 6.9  
-**Stable tag:** 1.0.0  
+**Stable tag:** 1.0.1 
 **License:** GPLv3 or later  
 **License URI:** [GPLv3 License](https://www.gnu.org/licenses/gpl-3.0.html)
 
@@ -141,6 +141,13 @@ For any issues or enhancement requests with this plugin, please contact the Unif
 The official documentation for this plugin is available at: [https://rt.app/docs/wordpress-plugin](https://rt.app/docs/wordpress-plugin)
 
 ## Changelog
+
+### Version 1.0.1
+
+- **Mobile Number Validation:** Resolved issues with mobile number validation during checkout.
+- **ZIP/Postal Code Validation:** Fixed ZIP/postal code validation to accept valid customer inputs.
+- **PO Box Validation:** Corrected PO Box address validation to improve address verification.
+- **Invalid API Key Handling:** Fixed invalid API key validation and improved error handling for better reliability.
 
 ### Version 1.0.0 (Initial Release)
 
