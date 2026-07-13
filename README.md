@@ -8,7 +8,7 @@ The Unified Payment Gateway plugin for WooCommerce 8.9+ allows you to accept fia
 **Tags:** woocommerce, payment gateway, fiat, Unified  
 **Requires at least:** 6.2  
 **Tested up to:** 6.9  
-**Stable tag:** 1.0.1 
+**Stable tag:** 1.0.2 
 **License:** GPLv3 or later  
 **License URI:** [GPLv3 License](https://www.gnu.org/licenses/gpl-3.0.html)
 
@@ -141,6 +141,9 @@ For any issues or enhancement requests with this plugin, please contact the Unif
 The official documentation for this plugin is available at: [https://rt.app/docs/wordpress-plugin](https://rt.app/docs/wordpress-plugin)
 
 ## Changelog
+
+### Version 1.0.2
+- Failed Payment Redirect: Improved the failed payment flow by redirecting customers back to the checkout page without displaying a duplicate payment failure notice, preventing redundant error messages.
 
 ### Version 1.0.1
 

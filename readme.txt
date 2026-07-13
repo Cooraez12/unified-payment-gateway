@@ -3,7 +3,7 @@ Contributors: Unified
 Tags: woocommerce, payment gateway, fiat, Unified
 Requires at least: 5.0
 Tested up to: 6.9
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -27,6 +27,9 @@ Visit the DFin website and log in to your account. Navigate to Developer Setting
 
 == Changelog ==
 
+= 1.0.2 =
+* Improved failed payment handling by preventing duplicate payment failure notices when redirecting customers back to the checkout page.
+
 = 1.0.1 =
 * Resolved mobile number validation issues during checkout.
 * Fixed ZIP/postal code validation to support valid customer inputs.
@@ -37,6 +40,9 @@ Visit the DFin website and log in to your account. Navigate to Developer Setting
 * Initial release.
 
 == Upgrade Notice ==
+
+= 1.0.2 =
+* This release improves the payment experience by preventing duplicate payment failure notices during failed payment redirects.
 
 = 1.0.1 =
 * This release improves the payment experience by resolving mobile number, ZIP/postal code, and PO Box validation issues. It also fixes invalid API key handling to improve plugin reliability and ensure a smoother checkout experience.

@@ -308,7 +308,9 @@ class UNIFIED_PAYMENT_GATEWAY_REST_API
 		}
 
 		if (in_array($target_status, ['failed', 'cancelled'])) {
-			wc_add_notice('Payment was not completed. Please try again.', 'error');
+			if($target_status !== 'failed') {
+				wc_add_notice('Payment was not completed. Please try again.', 'error');
+			}
 			wp_safe_redirect(wc_get_checkout_url());
 		} else {
 			// Send user to the 'Thank You' page
