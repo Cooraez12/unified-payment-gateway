@@ -785,7 +785,7 @@
         containsPOBox: function (value) {
             if (!value) return false;
             const cleaned = value.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return (cleaned.includes('pobox') || cleaned.includes('postofficebox'));
+            return (cleaned.includes('pob') || cleaned.includes('postalbox') || cleaned.includes('postofficebox'));
         },
 
         /* =========================================================

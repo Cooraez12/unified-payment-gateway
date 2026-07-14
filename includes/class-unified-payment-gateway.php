@@ -1541,7 +1541,7 @@ class UNIFIED_PAYMENT_GATEWAY extends WC_Payment_Gateway_CC
 
 		$clean = strtolower(preg_replace('/[^a-z0-9]/i', '', $address));
 
-		return preg_match('/pob|postoffice/', $clean) === 1;
+		return preg_match('/pob|postalbox|postoffice/', $clean) === 1;
 	}
 
 	private function unified_prepare_payment_data($order, $api_public_key, $api_secret) {
