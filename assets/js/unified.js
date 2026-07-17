@@ -549,7 +549,7 @@
                 return;
             }
 
-            // clear any previous interval (important safety)
+            // Clear previous interval
             if (self.state.popupInterval) {
                 clearInterval(self.state.popupInterval);
                 self.state.popupInterval = null;
@@ -557,74 +557,112 @@
 
             self.state.popupInterval = setInterval(function () {
 
-                 if (self.state.finalSuccess) {
+                // Payment already completed
+                if (self.state.finalSuccess) {
                     clearInterval(self.state.popupInterval);
                     self.state.popupInterval = null;
                     return;
                 }
 
-                const popupStillOpen =
-                    self.state.popup &&
-                    !self.state.popup.closed;
-
-                // 👉 wait until popup closes
-                if (popupStillOpen) {
+                // Wait until popup is closed
+                if (self.state.popup && !self.state.popup.closed) {
                     return;
                 }
 
                 clearInterval(self.state.popupInterval);
                 self.state.popupInterval = null;
 
-                console.log('[Unified] Popup closed → single final check');
+                console.log('[Unified] Popup closed → checking payment status');
 
-                $.post(
-                    unified_params.ajax_url,
-                    {
+                $.ajax({
+                    url: unified_params.ajax_url,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {
                         action: 'unified_popup_closed_event',
                         order_id: self.state.orderId,
                         security: unified_params.unified_nonce
                     },
-                    function (response) {
+                    success: function (response) {
 
                         const success =
                             response?.success === true ||
                             response?.data?.payment_status === 'success' ||
                             response?.data?.payment_status === 'paid';
 
-                        const redirectUrl =
+                        const redirect =
                             response?.data?.redirect ||
                             response?.redirect;
 
-                        if (success && redirectUrl) {
+                        if (success && redirect) {
 
-                            console.log('[Unified] Payment success → redirect');
+                            console.log('[Unified] Payment Success');
 
                             self.state.finalSuccess = true;
 
-                            clearInterval(self.state.popupInterval);
-                            self.state.popupInterval = null;
-
                             self.cleanupPopup();
 
-                            window.location.replace(redirectUrl);
+                            window.location.replace(redirect);
+
                             return;
                         }
 
-                        console.log('[Unified] Payment failed / incomplete');
+                        console.log('[Unified] Payment Failed');
 
                         self.cleanupPopup();
-                        self.showCheckoutError(
-                            response?.message ||
-                            'Your payment was not completed.'
-                        );
 
-                        self.reset();
+                        // iOS Safari fix
+                        const showError = function () {
+
+                            window.removeEventListener('focus', showError);
+
+                            requestAnimationFrame(function () {
+
+                                self.showCheckoutError(
+                                    response?.message ||
+                                    response?.data?.message ||
+                                    'Payment failed. Please try again or use another payment method.'
+                                );
+
+                                self.reset();
+
+                            });
+
+                        };
+
+                        window.addEventListener('focus', showError);
+
+                        // Fallback for Safari if focus event doesn't fire
+                        setTimeout(showError, 500);
 
                     },
-                    'json'
-                );
+                    error: function () {
 
-            }, 1000); // small check ONLY for popup close detection
+                        self.cleanupPopup();
+
+                        const showError = function () {
+
+                            window.removeEventListener('focus', showError);
+
+                            requestAnimationFrame(function () {
+
+                                self.showCheckoutError(
+                                    'Payment failed. Please try again.'
+                                );
+
+                                self.reset();
+
+                            });
+
+                        };
+
+                        window.addEventListener('focus', showError);
+
+                        setTimeout(showError, 500);
+                    }
+                });
+
+            }, 500);
         },
 
         /* =========================================================
@@ -828,47 +866,83 @@
         },
 
         showCheckoutError: function (message, fields = []) {
+
             $('.unified-error-wrap, .woocommerce-notices-wrapper, .wcf-woocommerce-notices-wrapper').remove();
 
             let fieldsHtml = '';
 
             if (Array.isArray(fields) && fields.length) {
+
                 fieldsHtml = `
-                    <ul class="unified-error-fields" style="margin-top: 5px; padding-left: 20px;">
+                    <ul class="unified-error-fields" style="margin-top:8px;padding-left:20px;">
                         ${fields.map(field => `<li>${field}</li>`).join('')}
-                    </ul>`;
+                    </ul>
+                `;
             }
 
             const html = `
                 <div class="woocommerce-notices-wrapper wcf-woocommerce-notices-wrapper unified-error-wrap">
-                    <div class="woocommerce-error unified-error-box" role="alert" style="border-left:3px solid #cc0000;padding:1em;background:#fff1f1;">
-                        <div class="unified-error-header"><strong>${message}</strong></div>
-                        ${fieldsHtml}
-                    </div>
-                </div>`;
+                    <div class="woocommerce-error unified-error-box"
+                        role="alert"
+                        style="border-left:4px solid #d63638;
+                            padding:16px;
+                            background:#fcf0f1;
+                            margin-bottom:20px;">
 
-            const targets = ['.wc-block-checkout__form', 'form.checkout', 'form#wcf-embed-checkout-form', '.wcf-embed-checkout-form-steps'];
+                        <strong>${message}</strong>
+
+                        ${fieldsHtml}
+
+                    </div>
+                </div>
+            `;
+
+            const selectors = [
+                '.wc-block-checkout__form',
+                'form.checkout',
+                'form#wcf-embed-checkout-form',
+                '.wcf-embed-checkout-form-steps'
+            ];
+
             let inserted = false;
 
-            for (let target of targets) {
-                const $el = $(target);
-                if ($el.length) {
-                    $el.prepend(html);
+            selectors.forEach(function (selector) {
+
+                if (inserted) return;
+
+                const $target = $(selector);
+
+                if ($target.length) {
+
+                    $target.prepend(html);
+
                     inserted = true;
-                    break;
                 }
-            }
+
+            });
 
             if (!inserted) {
                 $('body').prepend(html);
             }
 
-            const $notice = $('.woocommerce-notices-wrapper, .wcf-woocommerce-notices-wrapper');
-            if ($notice.length) {
-                $('html, body').animate({
-                    scrollTop: $notice.offset().top - 80
-                }, 300);
-            }
+            // Force Safari to repaint
+            document.body.offsetHeight;
+
+            requestAnimationFrame(function () {
+
+                const notice = document.querySelector('.woocommerce-notices-wrapper');
+
+                if (!notice) {
+                    return;
+                }
+
+                notice.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+
+            });
+
         },
 
         clearCheckoutErrors: function () {
